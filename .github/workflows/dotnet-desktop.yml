@@ -1,0 +1,67 @@
+name: .NET Desktop
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build:
+
+    strategy:
+      matrix:
+        configuration: [Debug, Release]
+
+    runs-on: windows-latest
+
+    env:
+      Solution_Name: UiAutomationGRPC.Server\UiAutomationGRPC.Server.sln # Focusing on Server SLN, or could build projects directly.
+      # Defining paths for direct project usage
+      Server_Project_Path: UiAutomationGRPC.Server\UiAutomationGRPC.Server.csproj
+      Client_Project_Path: UiAutomationGRPC.Client\UiAutomationGRPC.Client.csproj
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    # Install the .NET 8 workload to use dotnet CLI
+    - name: Install .NET 8
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    # Add MSBuild to the PATH: https://github.com/microsoft/setup-msbuild
+    - name: Setup MSBuild.exe
+      uses: microsoft/setup-msbuild@v2
+
+    # Restore the application
+    - name: Restore Server
+      run: dotnet restore ${{ env.Server_Project_Path }}
+
+    - name: Restore Client
+      run: dotnet restore ${{ env.Client_Project_Path }}
+
+    # Build Server
+    - name: Build Server
+      run: dotnet build ${{ env.Server_Project_Path }} --configuration ${{ matrix.configuration }} --no-restore
+
+    # Build Client
+    - name: Build Client
+      run: dotnet build ${{ env.Client_Project_Path }} --configuration ${{ matrix.configuration }} --no-restore
+
+    # Upload artifacts
+    - name: Upload Server Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: Server-${{ matrix.configuration }}
+        path: UiAutomationGRPC.Server\bin\${{ matrix.configuration }}\net472
+
+    - name: Upload Client Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: Client-${{ matrix.configuration }}
+        path: UiAutomationGRPC.Client\bin\${{ matrix.configuration }}\net472
