@@ -1,0 +1,149 @@
+syntax = "proto3";
+
+package UiAutomation;
+
+service UiAutomationService {
+  // Finds an element based on a condition starting from a root (or desktop if empty)
+  rpc FindElement (FindElementRequest) returns (ElementResponse);
+  
+  // Performs an action (Invoke, Click, etc.) on an element
+  rpc PerformAction (PerformActionRequest) returns (PerformActionResponse);
+  
+  // Gets a specific property of an element
+  rpc GetProperty (GetPropertyRequest) returns (GetPropertyResponse);
+
+  // Opens an application (Helper utility)
+  rpc OpenApp (OpenAppRequest) returns (OpenAppResponse);
+
+  // Reflection API: query metadata about automation properties, patterns, control types and per-element supported patterns/properties
+  rpc Reflect (ReflectionRequest) returns (ReflectionResponse);
+}
+
+// -- Common --
+
+message ElementResponse {
+    string runtime_id = 1; // Used as handle for subsequent calls
+    string name = 2;
+    string automation_id = 3;
+    string class_name = 4;
+    string control_type = 5;
+}
+
+// -- Finding --
+
+message FindElementRequest {
+  string start_runtime_id = 1; // Empty for Desktop
+  Condition condition = 2;
+  TreeScope scope = 3;
+}
+
+enum TreeScope {
+    ELEMENT = 0;
+    CHILDREN = 1;
+    DESCENDANTS = 2;
+    SUBTREE = 3;
+    PARENT = 4;
+    ANCESTORS = 5;
+}
+
+message Condition {
+    oneof condition_type {
+        PropertyCondition property_condition = 1;
+        BoolCondition and_condition = 2;
+        BoolCondition or_condition = 3;
+        Condition not_condition = 4;
+        bool true_condition = 5; // Matches everything
+    }
+}
+
+message PropertyCondition {
+    string property_name = 1; // e.g. "Name", "AutomationId", "ControlType"
+    string property_value = 2;
+    PropertyType property_type = 3; // Hint for parsing value
+}
+
+enum PropertyType {
+    STRING = 0;
+    BOOL = 1;
+    INT = 2;
+}
+
+message BoolCondition {
+    repeated Condition conditions = 1;
+}
+
+// -- Actions --
+
+message PerformActionRequest {
+    string runtime_id = 1;
+    ActionType action = 2;
+    repeated string arguments = 3; // For SetValue etc.
+}
+
+enum ActionType {
+    INVOKE = 0;
+    TOGGLE = 1;
+    SELECT = 2;
+    EXPAND_COLLAPSE = 3;
+    SET_VALUE = 4;
+    SET_FOCUS = 5;
+    CLICK = 6; // Simulated via GetClickablePoint + Input
+}
+
+message PerformActionResponse {
+    bool success = 1;
+    string message = 2;
+}
+
+// -- Properties --
+
+message GetPropertyRequest {
+    string runtime_id = 1;
+    string property_name = 2;
+}
+
+message GetPropertyResponse {
+    bool success = 1;
+    string value = 2;
+    string message = 3;
+}
+
+// -- Reflection API --
+
+enum ReflectionTarget {
+    AUTOMATION_PROPERTIES = 0; // All well-known AutomationProperty static fields (NameProperty, ...)
+    PATTERNS = 1;              // All well-known AutomationPattern entries
+    CONTROL_TYPES = 2;         // ControlType.* static fields
+    ELEMENT_SUPPORTED_PATTERNS = 3; // Patterns supported by a specific element (use runtime_id)
+    ELEMENT_SUPPORTED_PROPERTIES = 4; // Properties supported by a specific element (use runtime_id)
+}
+
+message ReflectionRequest {
+    ReflectionTarget target = 1;
+    string runtime_id = 2; // Optional for element-specific targets
+}
+
+message ReflectionEntry {
+    string name = 1;
+    string value = 2; // free-form value (id, programmatic name, etc.)
+}
+
+message ReflectionResponse {
+    repeated ReflectionEntry entries = 1;
+    bool success = 2;
+    string message = 3;
+}
+
+// -- Utils --
+
+message OpenAppRequest {
+    string app_name = 1;
+    string arguments = 2;
+}
+
+message OpenAppResponse {
+    bool success = 1;
+    string message = 2;
+    int32 process_id = 3;
+}
+
