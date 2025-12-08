@@ -14,7 +14,7 @@ using PropertyCondition = System.Windows.Automation.PropertyCondition;
 
 namespace UiAutomationGRPC.Server
 {
-    public class UiAutomationServiceImplementation : UiAutomationService.UiAutomationServiceBase
+    public class UiAutomationService : UiAutomation.UiAutomationService.UiAutomationServiceBase
     {
         // Cache to store generic AutomationElements to retrieve them by ID for subsequent calls
         private static readonly ConcurrentDictionary<string, AutomationElement> _elementCache = new ConcurrentDictionary<string, AutomationElement>();
