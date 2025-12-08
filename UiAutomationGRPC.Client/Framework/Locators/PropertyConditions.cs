@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Windows.Automation;
-using UiAutomation;
+using System.Windows.Automation;
 
 namespace UiAutomationGRPC.Client
 {

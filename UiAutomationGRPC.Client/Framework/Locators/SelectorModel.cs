@@ -1,5 +1,5 @@
 ﻿using System.Collections.Generic;
-using UiAutomation;
+using System.Windows.Automation;
 
 namespace UiAutomationGRPC.Client
 {
