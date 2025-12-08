@@ -23,8 +23,9 @@ service UiAutomationService {
 
   // Reflection API: query metadata about automation properties, patterns, control types and per-element supported patterns/properties
   rpc Reflect (ReflectionRequest) returns (ReflectionResponse);
- 
-  
+
+  // Sends keys to the active application
+  rpc SendKeys (SendKeysRequest) returns (PerformActionResponse);
 }
 
 // -- Common --
@@ -164,5 +165,10 @@ message OpenAppResponse {
     bool success = 1;
     string message = 2;
     int32 process_id = 3;
+}
+
+message SendKeysRequest {
+    string keys = 1;
+    bool wait = 2; // default true
 }
 

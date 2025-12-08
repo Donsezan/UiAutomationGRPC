@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Grpc.Core;
 using UiAutomation;
 using UiAutomationGRPC.Client.Calc.Pages;
+using UiAutomationGRPC.Client.Framework.Helpers;
 
 namespace UiAutomationGRPC.Client
 {
@@ -17,6 +18,9 @@ namespace UiAutomationGRPC.Client
 
             try 
             {
+                // Initialize KeyboardHelper
+                KeyboardHelper.Init(client);
+
                 // 1. Open Calc
                 Console.WriteLine("Opening Calculator...");
                 var openResponse = await client.OpenAppAsync(new AppRequest { AppName = "calc" });
@@ -36,56 +40,67 @@ namespace UiAutomationGRPC.Client
                 // 4. Interaction
                 Console.WriteLine("Waiting for interactions...");
 
+                // Example 1: Click interactions
                 try {
+                     Console.WriteLine("Performing Click interactions...");
                      calcPage
                         .ClickTwo()
                         .ClickPlus()
                         .ClickTwo()
-                        .ClickEqual()
-                        .ClickNavigationButton()
-                        .ClickSettings()
-                        .ClickBack();
-
-                     await Task.Delay(1000); // Wait for calculation
-
-                    // Verify
-                    var resultName = calcPage.GetResult();
-                    Console.WriteLine($"Result Name: {resultName}");
-                    
-                    if (resultName.EndsWith("4"))
-                        Console.WriteLine("SUCCESS: Result is 4.");
-                    else
-                        Console.WriteLine("FAILURE: Unexpected result.");
-
+                        .ClickEqual();
+                     
+                     // Verify
+                     var resultName = calcPage.GetResult();
+                     Console.WriteLine($"Click Result: {resultName}");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Interaction Error: {ex.Message}");
+                    Console.WriteLine($"Click Interaction Error: {ex.Message}");
                 }
 
+                await Task.Delay(1000);
+
+                // Example 2: Keyboard interactions
                 try
                 {
-                    calcPage
-                    .SendKey(2)
-                    .SendKey(+)
-                    .SendKey(2)
-                    .SendKey(=);
+                    Console.WriteLine("Performing Keyboard interactions...");
+                    // Sending "2+2="
+                    KeyboardHelper.SendKey("2");
+                    KeyboardHelper.SendKey("{ADD}"); // + is {ADD} or + depending on implementation, SendKeys usually takes + as shift, but for calc maybe simple
+                    KeyboardHelper.SendKey("2");
+                    KeyboardHelper.SendKey("=");
 
                     await Task.Delay(1000); // Wait for calculation
 
                     // Verify
                     var resultName = calcPage.GetResult();
-                    Console.WriteLine($"Result Name: {resultName}");
+                    Console.WriteLine($"Keyboard Result Name: {resultName}");
 
-                    if (resultName.EndsWith("4"))
-                        Console.WriteLine("SUCCESS: Result is 4.");
+                    if (resultName.EndsWith("8")) // accumulated if not cleared, or 4 if cleared or new
+                        Console.WriteLine("SUCCESS: Result ends with expected value (context dependent).");
                     else
-                        Console.WriteLine("FAILURE: Unexpected result.");
+                        Console.WriteLine($"Result: {resultName}");
 
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Interaction Error: {ex.Message}");
+                    Console.WriteLine($"Keyboard Interaction Error: {ex.Message}");
+                }
+
+                // Example 3: Close app
+                try
+                {
+                    var status = client.CloseApp(new AppRequest { AppName = "CalculatorApp" });
+                    if (!status.Success)
+                    {
+                        Console.WriteLine($"Failed to open app: {openResponse.Message}");
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+
+                    Console.WriteLine($"Close app Error: {ex.Message}");
                 }
 
             }

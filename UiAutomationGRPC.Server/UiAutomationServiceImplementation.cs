@@ -1,14 +1,16 @@
+using Grpc.Core;
+using Grpc.Core.Logging;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Automation;
-using Grpc.Core;
 using UiAutomation;
 using PropertyCondition = System.Windows.Automation.PropertyCondition;
-using System.Reflection;
 
 namespace UiAutomationGRPC.Server
 {
@@ -160,6 +162,67 @@ namespace UiAutomationGRPC.Server
             catch (Exception ex)
             {
                   return Task.FromResult(new OpenAppResponse { Success = false, Message = $"Failed to start app: {ex.Message}" });
+            }
+        }
+        public override Task<PerformActionResponse> CloseApp(AppRequest request, ServerCallContext context)
+        {
+            try
+            {
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = request.AppName,
+                    Arguments = request.Arguments ?? "",
+                    UseShellExecute = true
+                };
+                var success = false;
+                var exceptions= new List<string>();
+                var processes = Process.GetProcessesByName(request.AppName);
+                foreach (var p in processes)
+                {
+                    try
+                    {
+                        p.Kill();
+                        p.WaitForExit(); // possibly with a timeout
+                        Thread.Sleep(TimeSpan.FromSeconds(1));
+                        success = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        success = false;
+                        exceptions.Add(ex.Message);
+                    }
+                }
+                if (!success)
+                {
+                    return Task.FromResult(new PerformActionResponse { Success = false, Message = $"Failed to close one or more instances. Exceptions: {string.Join(", ", exceptions.ToArray())}" });
+                }
+                return Task.FromResult(new PerformActionResponse { Success = true, Message = $"All instance of app closed. Instance count: {processes.Length}" });
+            }
+            catch (Exception ex)
+            {
+                return Task.FromResult(new PerformActionResponse { Success = false, Message = $"Failed to close one or more instances. Exception: {ex.Message}" });
+            }
+        }
+
+
+        public override Task<PerformActionResponse> SendKeys(SendKeysRequest request, ServerCallContext context)
+        {
+            try
+            {
+                if (request.Wait)
+                {
+                    System.Windows.Forms.SendKeys.SendWait(request.Keys);
+                }
+                else
+                {
+                    System.Windows.Forms.SendKeys.Send(request.Keys);
+                }
+                
+                return Task.FromResult(new PerformActionResponse { Success = true, Message = "Keys sent" });
+            }
+            catch (Exception ex)
+            {
+                return Task.FromResult(new PerformActionResponse { Success = false, Message = $"Failed to send keys: {ex.Message}" });
             }
         }
 
