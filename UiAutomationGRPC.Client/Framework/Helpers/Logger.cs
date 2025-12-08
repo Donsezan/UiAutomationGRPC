@@ -1,25 +1,25 @@
 ﻿using System;
+using UiAutomationGRPC.Client;
 using UiAutomationGRPC.Client.Framework.Helpers;
-using UiAutomationGRPC.Client.Framework.Models;
 
 namespace CoreTest.Helpers
 {
     public static class Logger
     {
-        public static void WriteLog(AutomationElement element, string log)
+        public static void WriteLog(IAutomationElement element, string log)
         {
             Console.WriteLine("Step: " + DataHelper.GetCurrentMethodName());
-            if (element.Name != null)
+            if (element.Name() != null)
             {
-                Console.WriteLine("{0} {1}", log, element.Name);
+                Console.WriteLine("{0} {1}", log, element.Name());
             }
-            else if (element.AutomationId != null)
+            else if (element.AutomationId() != null)
             {
-                Console.WriteLine("{0} {1}", log, element.AutomationId);
+                Console.WriteLine("{0} {1}", log, element.AutomationId());
             }
-            else if (element.ClassName != null)
+            else if (element.ClassName() != null)
             {
-                Console.WriteLine("{0}  {1}", log, element.ClassName);
+                Console.WriteLine("{0}  {1}", log, element.ClassName());
             }
             else
             {

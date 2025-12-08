@@ -2,9 +2,7 @@
 using System.Threading.Tasks;
 using Grpc.Core;
 using UiAutomation;
-using UiAutomationGRPC.Client.Framework;
-using UiAutomationGRPC.Client.Framework.Locators;
-using UiAutomationGRPC.Client.Framework.Pages;
+using UiAutomationGRPC.Client.Calc.Pages;
 
 namespace UiAutomationGRPC.Client
 {
@@ -30,13 +28,10 @@ namespace UiAutomationGRPC.Client
                 Console.WriteLine($"App opened with Process ID: {openResponse.ProcessId}");
                  // Allow some time for app to start
                 await Task.Delay(2000);
-
-                // 2. Initialize Page Object Locators
-                var locators = new Locators(client);
-                
+                         
                 // 3. Initialize Page
                 // Wait for Calculator to be ready is implicit in PageObject or explicit here
-                var calcPage = new CalcPage(locators);
+                var calcPage = new CalcPage(new CalcPageLocators(client));
 
                 // 4. Interaction
                 Console.WriteLine("Waiting for interactions...");

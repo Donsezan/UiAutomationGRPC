@@ -59,6 +59,24 @@ namespace UiAutomationGRPC.Client
         }
 
         /// <summary>
+        /// This method search child with name
+        /// </summary>
+        /// <param name="name">Name of child element</param>
+        /// <returns>ChildActions</returns>
+        public ChildActions ControlType(string type)
+        {
+            var previesSelector = _selector;
+            _selector = new SelectorModel
+            {
+                SearchType = _searchType,
+                Condition = previesSelector.Condition,
+                AdditionalSearchProperty = type
+            };
+            List.Add(_selector);
+            return new ChildActions(List, _selector, _searchType);
+        }
+
+        /// <summary>
         /// This method search Descendants with conditions
         /// </summary>
         /// <param name="propertyConditions">Conditions of Descendants element</param>
