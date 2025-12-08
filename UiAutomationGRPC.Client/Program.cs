@@ -21,7 +21,7 @@ namespace UiAutomationGRPC.Client
             {
                 // 1. Open Calc
                 Console.WriteLine("Opening Calculator...");
-                var openResponse = await client.OpenAppAsync(new OpenAppRequest { AppName = "calc" });
+                var openResponse = await client.OpenAppAsync(new AppRequest { AppName = "calc" });
                 if (!openResponse.Success) 
                 {
                     Console.WriteLine($"Failed to open app: {openResponse.Message}");

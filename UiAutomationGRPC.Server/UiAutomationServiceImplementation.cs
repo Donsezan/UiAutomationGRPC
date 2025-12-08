@@ -90,13 +90,6 @@ namespace UiAutomationGRPC.Server
                         element.SetFocus();
                         break;
                     case ActionType.Click:
-                         // Basic click implementation using GetClickablePoint and Win32 mouse ops could go here
-                         // For now, let's try InvokePattern as a fallback or just specific Invoke
-                         // Real mouse click requires importing user32.dll usually. 
-                         // We will attempt Invoke as it's safer for UIA, otherwise we need a helper for Mouse.
-                         // Let's implement a simple point click if Invoke isn't available? 
-                         // For simplicity in this step, let's map Click to Invoke for Buttons, or fail.
-                         // Actually, let's try getting ClickablePoint and just logging for now or fallback to Invoke.
                          if (element.TryGetCurrentPattern(InvokePattern.Pattern, out object invPat))
                          {
                              ((InvokePattern)invPat).Invoke();
@@ -145,7 +138,7 @@ namespace UiAutomationGRPC.Server
             }
         }
 
-        public override Task<OpenAppResponse> OpenApp(OpenAppRequest request, ServerCallContext context)
+        public override Task<OpenAppResponse> OpenApp(AppRequest request, ServerCallContext context)
         {
             try
             {
