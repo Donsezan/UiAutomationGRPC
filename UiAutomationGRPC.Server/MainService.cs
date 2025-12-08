@@ -21,11 +21,11 @@ namespace UiAutomationGRPC.Server
         {
             try 
             {
-                var reflectionServiceImpl = new ReflectionServiceImpl(UiAutomationService.Descriptor, ServerReflection.Descriptor);
+                var reflectionServiceImpl = new ReflectionServiceImpl(UiAutomation.UiAutomationService.Descriptor, ServerReflection.Descriptor);
                 _server = new Grpc.Core.Server
                 {
-                    Services = { 
-                        UiAutomationService.BindService(new UiAutomationServiceImplementation()),
+                    Services = {
+                        UiAutomation.UiAutomationService.BindService(new UiAutomationService()),
                         ServerReflection.BindService(reflectionServiceImpl)
                     },
                     Ports = { new ServerPort("127.0.0.1", 50051, ServerCredentials.Insecure) }

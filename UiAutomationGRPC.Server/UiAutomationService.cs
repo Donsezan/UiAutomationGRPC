@@ -1,18 +1,20 @@
+using Grpc.Core;
+using Grpc.Core.Logging;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Automation;
-using Grpc.Core;
 using UiAutomation;
 using PropertyCondition = System.Windows.Automation.PropertyCondition;
-using System.Reflection;
 
 namespace UiAutomationGRPC.Server
 {
-    public class UiAutomationServiceImplementation : UiAutomationService.UiAutomationServiceBase
+    public class UiAutomationService : UiAutomation.UiAutomationService.UiAutomationServiceBase
     {
         // Cache to store generic AutomationElements to retrieve them by ID for subsequent calls
         private static readonly ConcurrentDictionary<string, AutomationElement> _elementCache = new ConcurrentDictionary<string, AutomationElement>();
@@ -90,13 +92,6 @@ namespace UiAutomationGRPC.Server
                         element.SetFocus();
                         break;
                     case ActionType.Click:
-                         // Basic click implementation using GetClickablePoint and Win32 mouse ops could go here
-                         // For now, let's try InvokePattern as a fallback or just specific Invoke
-                         // Real mouse click requires importing user32.dll usually. 
-                         // We will attempt Invoke as it's safer for UIA, otherwise we need a helper for Mouse.
-                         // Let's implement a simple point click if Invoke isn't available? 
-                         // For simplicity in this step, let's map Click to Invoke for Buttons, or fail.
-                         // Actually, let's try getting ClickablePoint and just logging for now or fallback to Invoke.
                          if (element.TryGetCurrentPattern(InvokePattern.Pattern, out object invPat))
                          {
                              ((InvokePattern)invPat).Invoke();
@@ -145,7 +140,7 @@ namespace UiAutomationGRPC.Server
             }
         }
 
-        public override Task<OpenAppResponse> OpenApp(OpenAppRequest request, ServerCallContext context)
+        public override Task<OpenAppResponse> OpenApp(AppRequest request, ServerCallContext context)
         {
             try
             {
@@ -167,6 +162,67 @@ namespace UiAutomationGRPC.Server
             catch (Exception ex)
             {
                   return Task.FromResult(new OpenAppResponse { Success = false, Message = $"Failed to start app: {ex.Message}" });
+            }
+        }
+        public override Task<PerformActionResponse> CloseApp(AppRequest request, ServerCallContext context)
+        {
+            try
+            {
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = request.AppName,
+                    Arguments = request.Arguments ?? "",
+                    UseShellExecute = true
+                };
+                var success = false;
+                var exceptions= new List<string>();
+                var processes = Process.GetProcessesByName(request.AppName);
+                foreach (var p in processes)
+                {
+                    try
+                    {
+                        p.Kill();
+                        p.WaitForExit(); // possibly with a timeout
+                        Thread.Sleep(TimeSpan.FromSeconds(1));
+                        success = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        success = false;
+                        exceptions.Add(ex.Message);
+                    }
+                }
+                if (!success)
+                {
+                    return Task.FromResult(new PerformActionResponse { Success = false, Message = $"Failed to close one or more instances. Exceptions: {string.Join(", ", exceptions.ToArray())}" });
+                }
+                return Task.FromResult(new PerformActionResponse { Success = true, Message = $"All instance of app closed. Instance count: {processes.Length}" });
+            }
+            catch (Exception ex)
+            {
+                return Task.FromResult(new PerformActionResponse { Success = false, Message = $"Failed to close one or more instances. Exception: {ex.Message}" });
+            }
+        }
+
+
+        public override Task<PerformActionResponse> SendKeys(SendKeysRequest request, ServerCallContext context)
+        {
+            try
+            {
+                if (request.Wait)
+                {
+                    System.Windows.Forms.SendKeys.SendWait(request.Keys);
+                }
+                else
+                {
+                    System.Windows.Forms.SendKeys.Send(request.Keys);
+                }
+                
+                return Task.FromResult(new PerformActionResponse { Success = true, Message = "Keys sent" });
+            }
+            catch (Exception ex)
+            {
+                return Task.FromResult(new PerformActionResponse { Success = false, Message = $"Failed to send keys: {ex.Message}" });
             }
         }
 

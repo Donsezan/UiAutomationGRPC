@@ -58,8 +58,6 @@ UiAutomationGRPC
 │   ├── UiAutomationServiceImplementation.cs # Core logic
 │   └── UiAutomationGRPC.Server.csproj
 ├── UiAutomationGRPC.Client    # gRPC Client sample
-│   ├── Program.cs             # Client entry point
-│   └── UiAutomationGRPC.Client.csproj
 └── README.md
 ```
 
@@ -76,11 +74,12 @@ The service is defined in `uiautomation.proto`.
 | `GetProperty` | Retrieve a specific property value from an element. |
 | `OpenApp` | Launch an application by name or path. |
 | `Reflect` | query metadata about supported automation properties and patterns. |
+| `...` | ... |
 
 ### Key Concepts
 
 - **Runtime ID**: A string handle returned by `FindElement` that uniquely identifies a UI element interface for subsequent calls.
-- **Conditions**: The search query language supports `PropertyCondition` (Name=X), `BoolCondition` (AND/OR/NOT), giving you flexibility in finding elements.
+
 
 ## License
 

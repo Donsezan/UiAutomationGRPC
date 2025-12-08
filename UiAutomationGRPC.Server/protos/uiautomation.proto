@@ -13,10 +13,19 @@ service UiAutomationService {
   rpc GetProperty (GetPropertyRequest) returns (GetPropertyResponse);
 
   // Opens an application (Helper utility)
-  rpc OpenApp (OpenAppRequest) returns (OpenAppResponse);
+  rpc OpenApp (AppRequest) returns (OpenAppResponse);
+    
+  // Closes an application (Helper utility)
+  rpc CloseApp (AppRequest) returns (PerformActionResponse);
+
+  // Takes a screenshot of the application window (Helper utility)
+  rpc TakeScreenshot (OpenAppResponse) returns (PerformActionResponse);
 
   // Reflection API: query metadata about automation properties, patterns, control types and per-element supported patterns/properties
   rpc Reflect (ReflectionRequest) returns (ReflectionResponse);
+
+  // Sends keys to the active application
+  rpc SendKeys (SendKeysRequest) returns (PerformActionResponse);
 }
 
 // -- Common --
@@ -87,7 +96,18 @@ enum ActionType {
     EXPAND_COLLAPSE = 3;
     SET_VALUE = 4;
     SET_FOCUS = 5;
-    CLICK = 6; // Simulated via GetClickablePoint + Input
+    CLICK = 6; // Simulated via GetClickablePoint + Input 
+    Move = 7; // Move cursor
+    MoveTo = 8; // Move cursor to element's clickable point
+    LeftClick = 9; // Simulated left click
+    RightClick = 10; // Simulated right click
+    LeftDown = 11; // Simulated left button down
+    LeftUp = 12; // Simulated left button up
+    RightDown = 13; // Simulated right button down
+    RightUp = 14; // Simulated right button up
+    MousWeelScroll = 15; // Simulated mouse wheel scroll, argument: delta
+    MouseMiddleClick = 16; // Simulated middle click
+    DoubleClick = 17; // Simulated double click
 }
 
 message PerformActionResponse {
@@ -136,7 +156,7 @@ message ReflectionResponse {
 
 // -- Utils --
 
-message OpenAppRequest {
+message AppRequest {
     string app_name = 1;
     string arguments = 2;
 }
@@ -145,5 +165,10 @@ message OpenAppResponse {
     bool success = 1;
     string message = 2;
     int32 process_id = 3;
+}
+
+message SendKeysRequest {
+    string keys = 1;
+    bool wait = 2; // default true
 }
 
