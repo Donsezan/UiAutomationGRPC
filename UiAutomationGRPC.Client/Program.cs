@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using Grpc.Core;
 using UiAutomation;
 using UiAutomationGRPC.Client.Calc.Pages;
-using UiAutomationGRPC.Client.Framework.Helpers;
+using UiAutomationGRPC.Library.Helpers;
 
 namespace UiAutomationGRPC.Client
 {

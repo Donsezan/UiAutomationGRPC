@@ -3,7 +3,9 @@ using System.Drawing;
 using System.Windows.Automation;
 using System.Xml.Linq;
 using UiAutomation;
-using UiAutomationGRPC.Client.Framework;
+using UiAutomationGRPC.Library;
+using UiAutomationGRPC.Library.Locators;
+using UiAutomationGRPC.Library.Helpers;
 
 namespace UiAutomationGRPC.Client.Calc.Pages
 {

@@ -1,12 +1,13 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>net472</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
-    <Protobuf Include="..\UiAutomationGRPC.Server\protos\uiautomation.proto" GrpcServices="Client" />
+    <Protobuf Include="Protos\uiautomation.proto" GrpcServices="Client" Access="Public" />
   </ItemGroup>
 
   <ItemGroup>
@@ -14,10 +15,7 @@
     <Reference Include="UIAutomationTypes" />
     <Reference Include="WindowsBase" />
     <Reference Include="System.Windows.Forms" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\UiAutomationGRPC.Library\UiAutomationGRPC.Library.csproj" />
+    <Reference Include="System.Drawing" />
   </ItemGroup>
 
   <ItemGroup>
