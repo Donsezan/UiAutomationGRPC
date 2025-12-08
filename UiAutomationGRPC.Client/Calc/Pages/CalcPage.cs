@@ -47,6 +47,12 @@ namespace UiAutomationGRPC.Client.Calc.Pages
             _locators.ResultText.Name();
             return new CalcNavigationPaget<CalcPage>(_client, this);
         }
+
+        public CalcPage ClickResultText()
+        {
+            _locators.ResultText.Click();
+            return this;
+        }
     }
 
     public class CalcPageLocators

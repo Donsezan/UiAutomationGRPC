@@ -1,13 +1,8 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Runtime.Serialization.Json;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace UiAutomationGRPC.Client.Framework.Helpers
 {
@@ -76,50 +71,6 @@ namespace UiAutomationGRPC.Client.Framework.Helpers
             public ushort wMinute;
             public ushort wSecond;
             public ushort wMilliseconds;
-        }
-
-        public static string GetCurrentDay() //This method returns day in format "1,10,29"
-        {
-            var day = DateTime.Today.Day.ToString();
-            return day;
-        }
-
-        public static string GetCurrentYear() //This method returns day in format "1,10,29"
-        {
-            var year = DateTime.Today.Year.ToString();
-            return year;
-        }
-
-        public static string GetMonthAndYear() //This method returns date in format 1216
-        {
-            var systime = new Systemtime();
-            GetSystemTime(ref systime);
-            var monthUshort = systime.wMonth;
-            var month = monthUshort.ToString();
-            if (monthUshort <= 9)
-            {
-                month = "0" + month; // Change format of month
-            }
-            var year = systime.wYear.ToString();
-            var monthAndYear = month + year.Substring(2, 2);
-            return monthAndYear;
-        }
-               
-        private static void ShowCurrentTime()
-        {
-            // Call the native GetSystemTime method
-            // with the defined structure.
-            Systemtime sysTime = new Systemtime();
-            GetSystemTime(ref sysTime);
-
-            // Show the current time.           
-            Console.WriteLine("Current Time: " +
-                              sysTime.wHour + ":"
-                              + sysTime.wMinute);
-            Console.WriteLine("Current Date: " +
-                              sysTime.wDay + ":"
-                              + sysTime.wMonth + ":"
-                              + sysTime.wYear);
-        }
+        }   
     }
 }

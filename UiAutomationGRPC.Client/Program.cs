@@ -41,7 +41,10 @@ namespace UiAutomationGRPC.Client
                         .ClickTwo()
                         .ClickPlus()
                         .ClickTwo()
-                        .ClickEqual();
+                        .ClickEqual()
+                        .ClickNavigationButton()
+                        .ClickSettings()
+                        .ClickBack();
 
                      await Task.Delay(1000); // Wait for calculation
 
@@ -49,6 +52,31 @@ namespace UiAutomationGRPC.Client
                     var resultName = calcPage.GetResult();
                     Console.WriteLine($"Result Name: {resultName}");
                     
+                    if (resultName.EndsWith("4"))
+                        Console.WriteLine("SUCCESS: Result is 4.");
+                    else
+                        Console.WriteLine("FAILURE: Unexpected result.");
+
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Interaction Error: {ex.Message}");
+                }
+
+                try
+                {
+                    calcPage
+                    .SendKey(2)
+                    .SendKey(+)
+                    .SendKey(2)
+                    .SendKey(=);
+
+                    await Task.Delay(1000); // Wait for calculation
+
+                    // Verify
+                    var resultName = calcPage.GetResult();
+                    Console.WriteLine($"Result Name: {resultName}");
+
                     if (resultName.EndsWith("4"))
                         Console.WriteLine("SUCCESS: Result is 4.");
                     else

@@ -23,10 +23,10 @@ namespace UiAutomationGRPC.Client.Calc.Pages
             _locators.ButtonSettings.WaitForElementExist();
         }
 
-        public CalcNavigationPaget<TPage> ClickSettings()
+        public CalcSettingsPage<TPage> ClickSettings()
         {
             _locators.ButtonSettings.Click();
-            return this;
+            return new CalcSettingsPage<TPage>(_client, _previousPage);
         }
         public TPage ClickNavigationButton()
         {
