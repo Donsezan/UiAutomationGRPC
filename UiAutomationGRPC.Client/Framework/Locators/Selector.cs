@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Windows.Automation;
 
 namespace UiAutomationGRPC.Client
 {
@@ -108,6 +109,30 @@ namespace UiAutomationGRPC.Client
             };
             List.Add(_selector);
             return new MainActions(List, _selector, _searchType);
+        }
+
+        public SelectorFluentContext Descendants()
+        {
+            _searchType = SearchType.Descendants;
+            _selector = new SelectorModel
+            {
+                SearchType = _searchType,
+                Condition = new List<Condition>()
+            };
+            List.Add(_selector);
+            return new SelectorFluentContext(List, _selector);
+        }
+
+        public SelectorFluentContext Children()
+        {
+            _searchType = SearchType.Children;
+            _selector = new SelectorModel
+            {
+                SearchType = _searchType,
+                Condition = new List<Condition>()
+            };
+            List.Add(_selector);
+            return new SelectorFluentContext(List, _selector);
         }
     }
 

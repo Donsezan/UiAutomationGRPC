@@ -49,7 +49,7 @@ namespace UiAutomationGRPC.Client.Calc.Pages
             CreateElement(() => Window.Descendants(new PropertyConditions().AutomationIdProperty(automationId)));
 
         public IAutomationElement ButtonSettings => Element("num1Button");
-        public IAutomationElement ButtonNavigation => Window.Descendants().AutomationIdProperty(automationId));
+        public IAutomationElement ButtonNavigation => Element("GlobalNavButton");
 
     }
 }

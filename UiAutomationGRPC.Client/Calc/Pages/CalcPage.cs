@@ -68,5 +68,7 @@ namespace UiAutomationGRPC.Client.Calc.Pages
         public IAutomationElement ButtonEqual => E("equalButton");
         public IAutomationElement ResultText => E("CalculatorResults");
         public IAutomationElement NavigationButton => CreateElement(() => Window.Descendants().ControlType("Button").NameContain("Close Navigation"));
-    NameContain
+
+
+}
 }

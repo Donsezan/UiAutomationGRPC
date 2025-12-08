@@ -31,7 +31,7 @@ namespace UiAutomationGRPC.Client
                          
                 // 3. Initialize Page
                 // Wait for Calculator to be ready is implicit in PageObject or explicit here
-                var calcPage = new CalcPage(new CalcPageLocators(client));
+                var calcPage = new CalcPage(client);
 
                 // 4. Interaction
                 Console.WriteLine("Waiting for interactions...");
