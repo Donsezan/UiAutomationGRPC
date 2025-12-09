@@ -1,7 +1,4 @@
 using System;
-using System.Drawing;
-using System.Windows.Automation;
-using System.Xml.Linq;
 using UiAutomation;
 using UiAutomationGRPC.Library;
 using UiAutomationGRPC.Library.Locators;
@@ -10,10 +7,9 @@ using UiAutomationGRPC.Library.Helpers;
 namespace UiAutomationGRPC.Client.Calc.Pages
 {
     public class CalcPage : BasePageObject<CalcPage>
-    {
-        private readonly UiAutomationService.UiAutomationServiceClient _client;
+    {    
         private readonly CalcPageLocators _locators;
-        public CalcPage(UiAutomationService.UiAutomationServiceClient client)
+        public CalcPage(UiAutomationService.UiAutomationServiceClient client) : base(client)
         {
             // Optional: Wait for the app to be ready in constructor
             _client = client;
@@ -55,6 +51,12 @@ namespace UiAutomationGRPC.Client.Calc.Pages
             _locators.ResultText.Click();
             return this;
         }
+
+        public CalcPage SendKey(string key) {
+            KeyboardHelper.SendKey(key);
+            return this;
+        }
+
     }
 
     public class CalcPageLocators

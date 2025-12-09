@@ -1,20 +1,15 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Automation;
 using UiAutomation;
-using UiAutomationGRPC.Client.Framework;
+using UiAutomationGRPC.Library;
+using UiAutomationGRPC.Library.Locators;
 
 namespace UiAutomationGRPC.Client.Calc.Pages
 {
-    public class CalcNavigationPaget<TPage> where TPage : BasePageObject<TPage>
+    public class CalcNavigationPaget<TPage> : BasePageObject<TPage> where TPage : BasePageObject<TPage>
     {
         private readonly TPage _previousPage;
-        private readonly UiAutomationService.UiAutomationServiceClient _client;
         private readonly CalcNavigationPagetLocators _locators;
-        public CalcNavigationPaget(UiAutomationService.UiAutomationServiceClient client, TPage previousPage)
+        public CalcNavigationPaget(UiAutomationService.UiAutomationServiceClient client, TPage previousPage) : base(client)
         {
             _client = client ?? throw new ArgumentNullException(nameof(client));
             _previousPage = previousPage;

@@ -5,13 +5,10 @@
     <TargetFramework>net472</TargetFramework>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Protobuf Include="..\UiAutomationGRPC.Server\protos\uiautomation.proto" GrpcServices="Client" />
-  </ItemGroup>
+
 
   <ItemGroup>
-    <Reference Include="UIAutomationClient" />
-    <Reference Include="UIAutomationTypes" />
+
     <Reference Include="WindowsBase" />
     <Reference Include="System.Windows.Forms" />
   </ItemGroup>

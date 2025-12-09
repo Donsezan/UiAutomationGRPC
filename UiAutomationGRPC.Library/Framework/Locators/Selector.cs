@@ -1,5 +1,5 @@
 ﻿using System.Collections.Generic;
-using System.Windows.Automation;
+using UiAutomation;
 
 namespace UiAutomationGRPC.Library.Locators
 {

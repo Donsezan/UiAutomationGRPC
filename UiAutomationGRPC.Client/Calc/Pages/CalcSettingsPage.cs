@@ -1,16 +1,18 @@
 ﻿using System;
 using UiAutomation;
-using UiAutomationGRPC.Client.Framework;
+using UiAutomationGRPC.Library;
+using UiAutomationGRPC.Library.Locators;
 
 namespace UiAutomationGRPC.Client.Calc.Pages
 {
-    public class CalcSettingsPage<TPage> where TPage : BasePageObject<TPage>
+    public class CalcSettingsPage<TPage> : BasePageObject<TPage> where TPage : BasePageObject<TPage>
     {
         private readonly TPage _previousPage;
-        private readonly UiAutomationService.UiAutomationServiceClient _client;
         private readonly CalcSettingsPageLocators _locators;
-        public CalcSettingsPage(UiAutomationService.UiAutomationServiceClient client, TPage previousPage)
+
+        public CalcSettingsPage(UiAutomationService.UiAutomationServiceClient client, TPage previousPage)  : base(client)
         {
+        
             _client = client ?? throw new ArgumentNullException(nameof(client));
             _previousPage = previousPage;
             _locators = new CalcSettingsPageLocators(client);
