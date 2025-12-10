@@ -1,8 +1,7 @@
 ﻿using System;
-using UiAutomationGRPC.Client;
-using UiAutomationGRPC.Client.Framework.Helpers;
+using UiAutomationGRPC.Library;
 
-namespace CoreTest.Helpers
+namespace UiAutomationGRPC.Library.Helpers
 {
     public static class Logger
     {

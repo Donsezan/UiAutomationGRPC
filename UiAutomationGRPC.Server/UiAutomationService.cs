@@ -168,12 +168,6 @@ namespace UiAutomationGRPC.Server
         {
             try
             {
-                var startInfo = new ProcessStartInfo
-                {
-                    FileName = request.AppName,
-                    Arguments = request.Arguments ?? "",
-                    UseShellExecute = true
-                };
                 var success = false;
                 var exceptions= new List<string>();
                 var processes = Process.GetProcessesByName(request.AppName);
@@ -192,7 +186,7 @@ namespace UiAutomationGRPC.Server
                         exceptions.Add(ex.Message);
                     }
                 }
-                if (!success)
+                if (!success && processes.Length > 0)
                 {
                     return Task.FromResult(new PerformActionResponse { Success = false, Message = $"Failed to close one or more instances. Exceptions: {string.Join(", ", exceptions.ToArray())}" });
                 }
@@ -201,6 +195,21 @@ namespace UiAutomationGRPC.Server
             catch (Exception ex)
             {
                 return Task.FromResult(new PerformActionResponse { Success = false, Message = $"Failed to close one or more instances. Exception: {ex.Message}" });
+            }
+        }
+
+        public override Task<PerformActionResponse> CloseAppByProcessId(CloseAppByProcessIdRequest request, ServerCallContext context)
+        {
+            try
+            {
+                var process = Process.GetProcessById(request.ProcessId);
+                process.Kill();
+                process.WaitForExit();
+                return Task.FromResult(new PerformActionResponse { Success = true, Message = $"Process {request.ProcessId} closed." });
+            }
+            catch (Exception ex)
+            {
+                 return Task.FromResult(new PerformActionResponse { Success = false, Message = $"Failed to close process {request.ProcessId}: {ex.Message}" });
             }
         }
 

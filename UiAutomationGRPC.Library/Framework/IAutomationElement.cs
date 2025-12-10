@@ -1,7 +1,7 @@
-﻿using CoreTest.Helpers;
+﻿using UiAutomationGRPC.Library.Helpers;
 using System.Drawing;
 
-namespace UiAutomationGRPC.Client
+namespace UiAutomationGRPC.Library
 {
     /// <summary>
     /// Created by Nikita Anakolov  and Viktor Yakushenko :)

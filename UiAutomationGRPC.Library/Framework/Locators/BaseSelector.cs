@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
-using System.Windows.Automation;
 
-namespace UiAutomationGRPC.Client
+namespace UiAutomationGRPC.Library.Locators
 {
     public abstract class BaseSelector
     {

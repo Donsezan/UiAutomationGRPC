@@ -1,7 +1,7 @@
 using System.Collections.Generic;
-using System.Windows.Automation;
+using UiAutomation;
 
-namespace UiAutomationGRPC.Client
+namespace UiAutomationGRPC.Library.Locators
 {
     public class SelectorFluentContext : BaseSelector
     {
@@ -15,31 +15,35 @@ namespace UiAutomationGRPC.Client
 
         public SelectorFluentContext ControlType(string type)
         {
-            if (_currentSelector.Condition == null)
-                _currentSelector.Condition = new List<Condition>();
-            
-            _currentSelector.Condition.Add(new PropertyCondition(AutomationElement.LocalizedControlTypeProperty, type));
+            AddProperty("LocalizedControlType", type);
             return this;
         }
 
         public SelectorFluentContext AutomationId(string id)
         {
-            if (_currentSelector.Condition == null)
-                _currentSelector.Condition = new List<Condition>();
-            
-            _currentSelector.Condition.Add(new PropertyCondition(AutomationElement.AutomationIdProperty, id));
+            AddProperty("AutomationId", id);
             return this;
         }
 
         public SelectorFluentContext NameContain(string name)
         {
+            AddProperty("Name", name);
+            return this;
+        }
+
+        private void AddProperty(string name, string value)
+        {
             if (_currentSelector.Condition == null)
                 _currentSelector.Condition = new List<Condition>();
-
-            // Using NameProperty for "Contain" as a simplification or we could look into exact matching vs contains.
-            // Existing PropertyConditions uses NameProperty.
-            _currentSelector.Condition.Add(new PropertyCondition(AutomationElement.NameProperty, name));
-            return this;
+            
+            var propCondition = new PropertyCondition
+            {
+                PropertyName = name,
+                PropertyValue = value,
+                PropertyType = PropertyType.String
+            };
+            
+            _currentSelector.Condition.Add(new Condition { PropertyCondition = propCondition });
         }
 
         // Allow chaining back to new path steps

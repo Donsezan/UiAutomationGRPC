@@ -1,24 +1,18 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Automation;
-using UiAutomation;
-using UiAutomationGRPC.Client.Framework;
+using UiAutomationGRPC.Library;
+using UiAutomationGRPC.Library.Locators;
 
 namespace UiAutomationGRPC.Client.Calc.Pages
 {
-    public class CalcNavigationPaget<TPage> where TPage : BasePageObject<TPage>
+    public class CalcNavigationPaget<TPage> : BasePageObject<TPage> where TPage : BasePageObject<TPage>
     {
         private readonly TPage _previousPage;
-        private readonly UiAutomationService.UiAutomationServiceClient _client;
         private readonly CalcNavigationPagetLocators _locators;
-        public CalcNavigationPaget(UiAutomationService.UiAutomationServiceClient client, TPage previousPage)
+        public CalcNavigationPaget(UiAutomationDriver driver, TPage previousPage) : base(driver)
         {
-            _client = client ?? throw new ArgumentNullException(nameof(client));
+            _driver = driver ?? throw new ArgumentNullException(nameof(driver));
             _previousPage = previousPage;
-            _locators = new CalcNavigationPagetLocators(client);
+            _locators = new CalcNavigationPagetLocators(driver);
             // Optional: Wait for the app to be ready in constructor
             _locators.ButtonSettings.WaitForElementExist();
         }
@@ -26,7 +20,7 @@ namespace UiAutomationGRPC.Client.Calc.Pages
         public CalcSettingsPage<TPage> ClickSettings()
         {
             _locators.ButtonSettings.Click();
-            return new CalcSettingsPage<TPage>(_client, _previousPage);
+            return new CalcSettingsPage<TPage>(_driver, _previousPage);
         }
         public TPage ClickNavigationButton()
         {
@@ -37,11 +31,11 @@ namespace UiAutomationGRPC.Client.Calc.Pages
     }
     public class CalcNavigationPagetLocators
     {
-        private readonly UiAutomationService.UiAutomationServiceClient _client;
+        private readonly UiAutomationDriver _driver;
 
-        public CalcNavigationPagetLocators(UiAutomationService.UiAutomationServiceClient client) => _client = client;
+        public CalcNavigationPagetLocators(UiAutomationDriver driver) => _driver = driver;
 
-        private IAutomationElement CreateElement(Func<BaseSelector> selector) => new UiAutomationAdapter(_client, selector);
+        private IAutomationElement CreateElement(Func<BaseSelector> selector) => new UiAutomationAdapter(_driver, selector);
 
         private Selector Window => new Selector(new PropertyConditions().NameProperty("Calculator"));
 

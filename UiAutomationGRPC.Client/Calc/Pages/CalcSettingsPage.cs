@@ -1,19 +1,18 @@
 ﻿using System;
-using UiAutomation;
-using UiAutomationGRPC.Client.Framework;
+using UiAutomationGRPC.Library;
+using UiAutomationGRPC.Library.Locators;
 
 namespace UiAutomationGRPC.Client.Calc.Pages
 {
-    public class CalcSettingsPage<TPage> where TPage : BasePageObject<TPage>
+    public class CalcSettingsPage<TPage> : BasePageObject<TPage> where TPage : BasePageObject<TPage>
     {
-        private readonly TPage _previousPage;
-        private readonly UiAutomationService.UiAutomationServiceClient _client;
         private readonly CalcSettingsPageLocators _locators;
-        public CalcSettingsPage(UiAutomationService.UiAutomationServiceClient client, TPage previousPage)
+
+        public CalcSettingsPage(UiAutomationDriver driver, TPage previousPage)  : base(driver)
         {
-            _client = client ?? throw new ArgumentNullException(nameof(client));
-            _previousPage = previousPage;
-            _locators = new CalcSettingsPageLocators(client);
+        
+            _driver = driver ?? throw new ArgumentNullException(nameof(driver));
+            _locators = new CalcSettingsPageLocators(driver);
             // Optional: Wait for the app to be ready in constructor
             _locators.BackButton.WaitForElementExist();
         }
@@ -21,16 +20,16 @@ namespace UiAutomationGRPC.Client.Calc.Pages
         public CalcPage ClickBack()
         {
             _locators.BackButton.Click();
-            return new CalcPage(_client);
+            return new CalcPage(_driver);
         }
     }
     public class CalcSettingsPageLocators
     {
-        private readonly UiAutomationService.UiAutomationServiceClient _client;
+        private readonly UiAutomationDriver _driver;
 
-        public CalcSettingsPageLocators(UiAutomationService.UiAutomationServiceClient client) => _client = client;
+        public CalcSettingsPageLocators(UiAutomationDriver driver) => _driver = driver;
 
-        private IAutomationElement CreateElement(Func<BaseSelector> selector) => new UiAutomationAdapter(_client, selector);
+        private IAutomationElement CreateElement(Func<BaseSelector> selector) => new UiAutomationAdapter(_driver, selector);
 
         private Selector Window => new Selector(new PropertyConditions().NameProperty("Calculator"));
 

@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
-using System.Windows.Automation;
+using UiAutomation;
 
-namespace UiAutomationGRPC.Client
+namespace UiAutomationGRPC.Library.Locators
 {
     public enum SearchType
     {

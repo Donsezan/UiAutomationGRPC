@@ -1,7 +1,8 @@
 ﻿using System;
 using UiAutomation;
+using UiAutomationGRPC.Library.Locators;
 
-namespace UiAutomationGRPC.Client.Framework
+namespace UiAutomationGRPC.Library
 {
     // Wrapper to allow the syntax: new UiAutomationAdapter(() => new Selector(...))
     // We need to inject the client somehow or make it context-aware.
@@ -16,8 +17,8 @@ namespace UiAutomationGRPC.Client.Framework
     
     public class UiAutomationAdapter : RpcUiAutomationAdapter
     {
-         public UiAutomationAdapter(UiAutomationService.UiAutomationServiceClient client, Func<BaseSelector> selectorFunc) 
-            : base(client, selectorFunc)
+         public UiAutomationAdapter(UiAutomationDriver driver, Func<BaseSelector> selectorFunc) 
+            : base(driver, selectorFunc)
         {
         }
     }

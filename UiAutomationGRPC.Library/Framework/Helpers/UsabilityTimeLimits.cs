@@ -1,4 +1,4 @@
-﻿namespace CoreTest.Helpers
+﻿namespace UiAutomationGRPC.Library.Helpers
 {
     public class UsabilityTimeLimits
     {

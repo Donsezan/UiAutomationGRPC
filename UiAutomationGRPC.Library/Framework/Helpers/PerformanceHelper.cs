@@ -7,7 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CoreTest.Helpers
+namespace UiAutomationGRPC.Library.Helpers
 {
     public static class PerformanceHelper
     {

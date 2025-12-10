@@ -4,7 +4,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace UiAutomationGRPC.Client.Framework.Helpers
+namespace UiAutomationGRPC.Library.Helpers
 {
     public class DataHelper
     {

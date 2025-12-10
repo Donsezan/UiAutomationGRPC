@@ -3,16 +3,16 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Threading;
-using CoreTest.Helpers;
-using Grpc.Core;
-using UiAutomation;
-using UiAutomationGRPC.Client.Framework.Helpers;
+using UiAutomationGRPC.Library.Helpers;
+using UiAutomationGRPC.Library.Locators;
 
-namespace UiAutomationGRPC.Client.Framework
+using Uia = global::UiAutomation;
+
+namespace UiAutomationGRPC.Library
 {
     public class RpcUiAutomationAdapter : IAutomationElement
     {
-        private readonly UiAutomationService.UiAutomationServiceClient _client;
+        private readonly Uia.UiAutomationService.UiAutomationServiceClient _client;
         private readonly List<SelectorModel> _selectors;
         
         // Cache the runtime ID once found? 
@@ -27,9 +27,9 @@ namespace UiAutomationGRPC.Client.Framework
         
         // Strategy: Resolve the element on actions.
         
-        public RpcUiAutomationAdapter(UiAutomationService.UiAutomationServiceClient client, Func<BaseSelector> selectorFunc)
+        public RpcUiAutomationAdapter(UiAutomationDriver driver, Func<BaseSelector> selectorFunc)
         {
-            _client = client;
+            _client = driver.Client;
             // BaseSelector stores the list internally. We need to access it.
             // But BaseSelector doesn't expose List easily publicly (it is protected).
             // We might need to reflect or cast if possible, or assume we can get it.
@@ -52,56 +52,33 @@ namespace UiAutomationGRPC.Client.Framework
             
             foreach (var selector in _selectors)
             {
-                var req = new FindElementRequest
+                var req = new Uia.FindElementRequest
                 {
                     StartRuntimeId = currentRuntimeId,
                     Scope = ToProtoScope(selector.SearchType),
-                    // If we have multiple conditions, we might need an AndCondition. 
-                    // SelectorModel has List<Condition>.
                 };
                 
-                // Convert List<Condition> (which is System.Windows.Automation.Condition) to Proto Condition
+                // SelectorModel now holds List<UiAutomation.Condition> directly
                 if (selector.Condition != null && selector.Condition.Count > 0)
                 {
                     if (selector.Condition.Count == 1)
                     {
-                        req.Condition = ConditionConverter.Convert(selector.Condition[0]);
+                        req.Condition = selector.Condition[0];
                     }
                     else
                     {
-                        var boolCond = new UiAutomation.BoolCondition();
-                        foreach(var c in selector.Condition)
-                        {
-                            boolCond.Conditions.Add(ConditionConverter.Convert(c));
-                        }
-                        req.Condition = new UiAutomation.Condition { AndCondition = boolCond };
+                        var boolCond = new Uia.BoolCondition();
+                        boolCond.Conditions.AddRange(selector.Condition);
+                        req.Condition = new Uia.Condition { AndCondition = boolCond };
                     }
                 }
                 else
                 {
-                     req.Condition = new UiAutomation.Condition { TrueCondition = true };
+                     req.Condition = new Uia.Condition { TrueCondition = true };
                 }
 
-                // Handle AdditionalSearchProperty (Index or Name Contain)
-                // This logic needs to be server side or handled via complex conditions?
-                // The Proto "Condition" doesn't strictly support "Index" natively in FindElement (usually FindAll + index).
-                // Or we update Proto to support Index?
-                // User said: "Logic of work with the element on the client side" -> "Server should receive only the path ... and logic ... on the client side"
-                // Actually user said: "server should receive only the path ... and all logic of work with the element on the client side" - Wait.
-                // "all logic of work with the element on the client side" - this might be a typo OR I am misreading.
-                // "Update ... to use IAutomationElement and locators to interact with the server, where the server should receive only the path to the element and the action, and all logic of work with the element on the client side"
-                // This reads like: The Client holds the logic (IAutomationElement), determines the path, sends path+action to server. 
-                // So my approach is correct: Client has IAutomationElement -> resolves path -> sends commands.
-                
-                // Back to Index/NameContain:
-                // If the selector has "Index", we effectively need to FindAll and pick the Nth.
-                // Our Proto `FindElement` returns one element.
-                // We might need to loop or update Proto.
-                // For now, let's assume we just call FindElement and hope generic conditions work, 
-                // BUT "Index" is not a standard UIA property we can filter solely by query in one go typically.
-                // However, let's stick to the basic "Name/Id" flow which works with FindElement.
-                // If we need Index support, we might need a `FindElements` RPC or `Index` in FindElementRequest.
-                // I will assume standard filtering for now.
+                // Handle AdditionalSearchProperty (Index or Name Contain) if needed
+                // For now, relying on FindElement with properties.
                 
                 var resp = _client.FindElement(req);
                 currentRuntimeId = resp.RuntimeId;
@@ -109,10 +86,10 @@ namespace UiAutomationGRPC.Client.Framework
             return currentRuntimeId;
         }
 
-        private UiAutomation.TreeScope ToProtoScope(SearchType? type)
+        private Uia.TreeScope ToProtoScope(SearchType? type)
         {
-            if (type == SearchType.Children) return UiAutomation.TreeScope.Children;
-            return UiAutomation.TreeScope.Descendants; // Default
+            if (type == SearchType.Children) return Uia.TreeScope.Children;
+            return Uia.TreeScope.Descendants; // Default
         }
 
         private string _cachedRuntimeId;
@@ -127,7 +104,7 @@ namespace UiAutomationGRPC.Client.Framework
         public void Click()
         {
             var id = GetId();
-            _client.PerformAction(new PerformActionRequest { RuntimeId = id, Action = ActionType.Click });
+            _client.PerformAction(new Uia.PerformActionRequest { RuntimeId = id, Action = Uia.ActionType.Click });
         }
 
         public void Click(int x, int y)
@@ -144,32 +121,32 @@ namespace UiAutomationGRPC.Client.Framework
         public void DoubleClick()
         {
              var id = GetId();
-            _client.PerformAction(new PerformActionRequest { RuntimeId = id, Action = ActionType.DoubleClick });
+            _client.PerformAction(new Uia.PerformActionRequest { RuntimeId = id, Action = Uia.ActionType.DoubleClick });
         }
 
         public void Hover()
         {
              var id = GetId();
              // Maybe "MoveTo"?
-            _client.PerformAction(new PerformActionRequest { RuntimeId = id, Action = ActionType.MoveTo });
+            _client.PerformAction(new Uia.PerformActionRequest { RuntimeId = id, Action = Uia.ActionType.MoveTo });
         }
 
         public string Name()
         {
             var id = GetId();
-            return _client.GetProperty(new GetPropertyRequest { RuntimeId = id, PropertyName = "Name" }).Value;
+            return _client.GetProperty(new Uia.GetPropertyRequest { RuntimeId = id, PropertyName = "Name" }).Value;
         }
 
         public string ClassName()
         {
             var id = GetId();
-            return _client.GetProperty(new GetPropertyRequest { RuntimeId = id, PropertyName = "ClassName" }).Value;
+            return _client.GetProperty(new Uia.GetPropertyRequest { RuntimeId = id, PropertyName = "ClassName" }).Value;
         }
 
         public string AutomationId()
         {
             var id = GetId();
-            return _client.GetProperty(new GetPropertyRequest { RuntimeId = id, PropertyName = "AutomationId" }).Value;
+            return _client.GetProperty(new Uia.GetPropertyRequest { RuntimeId = id, PropertyName = "AutomationId" }).Value;
         }
 
         public void WaitForElementIsClickable()

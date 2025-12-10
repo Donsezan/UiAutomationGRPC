@@ -1,21 +1,18 @@
 using System;
-using System.Drawing;
-using System.Windows.Automation;
-using System.Xml.Linq;
-using UiAutomation;
-using UiAutomationGRPC.Client.Framework;
+using UiAutomationGRPC.Library;
+using UiAutomationGRPC.Library.Locators;
+using UiAutomationGRPC.Library.Helpers;
 
 namespace UiAutomationGRPC.Client.Calc.Pages
 {
     public class CalcPage : BasePageObject<CalcPage>
-    {
-        private readonly UiAutomationService.UiAutomationServiceClient _client;
+    {    
         private readonly CalcPageLocators _locators;
-        public CalcPage(UiAutomationService.UiAutomationServiceClient client)
+        public CalcPage(UiAutomationDriver driver) : base(driver)
         {
             // Optional: Wait for the app to be ready in constructor
-            _client = client;
-            _locators = new CalcPageLocators(client);
+            _driver = driver;
+            _locators = new CalcPageLocators(driver);
             _locators.ResultText.WaitForElementExist();
         }
 
@@ -45,7 +42,7 @@ namespace UiAutomationGRPC.Client.Calc.Pages
         public CalcNavigationPaget<CalcPage> ClickNavigationButton()
         {
             _locators.ResultText.Name();
-            return new CalcNavigationPaget<CalcPage>(_client, this);
+            return new CalcNavigationPaget<CalcPage>(_driver, this);
         }
 
         public CalcPage ClickResultText()
@@ -53,15 +50,21 @@ namespace UiAutomationGRPC.Client.Calc.Pages
             _locators.ResultText.Click();
             return this;
         }
+
+        public CalcPage SendKey(string key) {
+            KeyboardHelper.SendKey(key);
+            return this;
+        }
+
     }
 
     public class CalcPageLocators
     {
-        private readonly UiAutomationService.UiAutomationServiceClient _client;
+        private readonly UiAutomationDriver _driver;
 
-        public CalcPageLocators(UiAutomationService.UiAutomationServiceClient client) => _client = client;
+        public CalcPageLocators(UiAutomationDriver driver) => _driver = driver;
 
-        private IAutomationElement CreateElement(Func<BaseSelector> selector) => new UiAutomationAdapter(_client, selector);
+        private IAutomationElement CreateElement(Func<BaseSelector> selector) => new UiAutomationAdapter(_driver, selector);
 
         private Selector Window => new Selector(new PropertyConditions().NameProperty("Calculator"));
 
