@@ -22,7 +22,7 @@ service UiAutomationService {
   rpc CloseAppByProcessId (CloseAppByProcessIdRequest) returns (PerformActionResponse);
 
   // Takes a screenshot of the application window (Helper utility)
-  rpc TakeScreenshot (OpenAppResponse) returns (PerformActionResponse);
+  rpc TakeScreenshot (ScreenshotRequest) returns (ScreenshotResponse);
 
   // Reflection API: query metadata about automation properties, patterns, control types and per-element supported patterns/properties
   rpc Reflect (ReflectionRequest) returns (ReflectionResponse);
@@ -177,5 +177,23 @@ message OpenAppResponse {
 message SendKeysRequest {
     string keys = 1;
     bool wait = 2; // default true
+}
+
+message ScreenshotRequest {
+    string runtime_id = 1; // Optional
+    ScreenshotMode mode = 2;
+    int32 process_id = 3; // Optional, used for Window mode if runtime_id is missing
+}
+
+enum ScreenshotMode {
+    SCREENSHOT_MODE_ELEMENT = 0;
+    SCREENSHOT_MODE_WINDOW = 1;
+    // SCREEN = 2; // Potential future expansion
+}
+
+message ScreenshotResponse {
+    bytes image_data = 1;
+    bool success = 2;
+    string message = 3;
 }
 

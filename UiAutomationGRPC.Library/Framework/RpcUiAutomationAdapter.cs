@@ -226,5 +226,10 @@ namespace UiAutomationGRPC.Library
         {
              throw new NotImplementedException("Rectangle retrieval via gRPC not yet implemented fully.");
         }
+
+        public string GetRuntimeId()
+        {
+            return GetId();
+        }
     }
 }

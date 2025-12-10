@@ -34,6 +34,23 @@ namespace UiAutomationGRPC.Library
             var response = Client.CloseAppByProcessId(new CloseAppByProcessIdRequest { ProcessId = processId });
             return (response.Success, response.Message);
         }
+
+        public async Task<(bool Success, string Message, byte[] ImageData)> TakeElementScreenshot(string runtimeId)
+        {
+            var request = new ScreenshotRequest { Mode = ScreenshotMode.Element, RuntimeId = runtimeId };
+            var response = await Client.TakeScreenshotAsync(request);
+            return (response.Success, response.Message, response.ImageData.ToByteArray());
+        }
+
+        public async Task<(bool Success, string Message, byte[] ImageData)> TakeWindowScreenshot(string runtimeId = null, int? processId = 0)
+        {
+            var request = new ScreenshotRequest { Mode = ScreenshotMode.Window };
+            if (!string.IsNullOrEmpty(runtimeId)) request.RuntimeId = runtimeId;
+            if (processId.HasValue) request.ProcessId = processId.Value;
+
+            var response = await Client.TakeScreenshotAsync(request);
+            return (response.Success, response.Message, response.ImageData.ToByteArray());
+        }
         public void Dispose()
         {
             try

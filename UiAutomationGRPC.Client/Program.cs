@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using UiAutomationGRPC.Client.Calc.Pages;
 using UiAutomationGRPC.Library;
+using System.IO;
 
 namespace UiAutomationGRPC.Client
 {
@@ -16,11 +17,11 @@ namespace UiAutomationGRPC.Client
             {
                 // var client = driver.Client; // Internal now
                 try 
-                {             
+                {
                     // 1. Open Calc
                     Console.WriteLine("Opening Calculator...");
                     int processId = 0;
-                    try 
+                    try
                     {
                         var openResult = await driver.OpenApp("calc");
                         if (!openResult.Success)
@@ -33,13 +34,13 @@ namespace UiAutomationGRPC.Client
                     }
                     catch (Exception ex)
                     {
-                         Console.WriteLine(ex.Message);
-                         return;
+                        Console.WriteLine(ex.Message);
+                        return;
                     }
 
-                     // Allow some time for app to start
+                    // // Allow some time for app to start
                     await Task.Delay(2000);
-                             
+
                     // 3. Initialize Page
                     // Wait for Calculator to be ready is implicit in PageObject or explicit here
                     var calcPage = new CalcPage(driver);
@@ -48,17 +49,18 @@ namespace UiAutomationGRPC.Client
                     Console.WriteLine("Waiting for interactions...");
 
                     // Example 1: Click interactions
-                    try {
-                         Console.WriteLine("Performing Click interactions...");
-                         calcPage
-                            .ClickTwo()
-                            .ClickPlus()
-                            .ClickTwo()
-                            .ClickEqual();
-                         
-                         // Verify
-                         var resultName = calcPage.GetResult();
-                         Console.WriteLine($"Click Result: {resultName}");
+                    try
+                    {
+                        Console.WriteLine("Performing Click interactions...");
+                        calcPage
+                           .ClickTwo()
+                           .ClickPlus()
+                           .ClickTwo()
+                           .ClickEqual();
+
+                        // Verify
+                        var resultName = calcPage.GetResult();
+                        Console.WriteLine($"Click Result: {resultName}");
                     }
                     catch (Exception ex)
                     {
@@ -94,6 +96,72 @@ namespace UiAutomationGRPC.Client
                         Console.WriteLine($"Keyboard Interaction Error: {ex.Message}");
                     }
 
+                    // Example 5: Screenshots
+                    try
+                    {
+                        Console.WriteLine("Taking screenshots...");
+                        var locators = new CalcPageLocators(driver);
+                        var btn2 = locators.ButtonTwo;
+                        // Resolve ID
+                        string btnId = btn2.GetRuntimeId();
+                        Console.WriteLine($"Button Two ID: {btnId}");
+                        
+                        // Element Screenshot
+                        var screen1 = await driver.TakeElementScreenshot(btnId);
+                        if (screen1.Success)
+                        {
+                            File.WriteAllBytes("btn_two.png", screen1.ImageData);
+                            Console.WriteLine("Saved btn_two.png");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Error taking element screenshot: {screen1.Message}");
+                        }
+
+                        // Window Screenshot (Highlighting element)
+                        var screen2 = await driver.TakeWindowScreenshot(btnId);
+                        if (screen2.Success)
+                        {
+                            File.WriteAllBytes("window_highlight.png", screen2.ImageData);
+                            Console.WriteLine("Saved window_highlight.png");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Error taking window screenshot (highlight): {screen2.Message}");
+                        }
+                        
+                        // Window Screenshot (Process ID) - Disabled due to calc changing pId after launch
+                        /*
+                        if (processId > 0)
+                        {
+                            var screen3 = await driver.TakeWindowScreenshot(null, processId);
+                            if (screen3.Success)
+                            {
+                                File.WriteAllBytes("window_proc.png", screen3.ImageData);
+                                Console.WriteLine("Saved window_proc.png");
+                            }
+                            else
+                            {
+                                Console.WriteLine($"Error taking window screenshot (proc): {screen3.Message}");
+                            }
+                        }
+                        */
+                        // Window Screenshot (Full Screen)
+                        var screenFull = await driver.TakeWindowScreenshot(null, null);
+                        if (screenFull.Success)
+                        {
+                            File.WriteAllBytes("full_screen.png", screenFull.ImageData);
+                            Console.WriteLine("Saved full_screen.png");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"Error taking full screen screenshot: {screenFull.Message}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                         Console.WriteLine($"Screenshot Error: {ex.Message}");
+                    }
                     // Example 3: Close app by Name
                     try
                     {
@@ -106,7 +174,6 @@ namespace UiAutomationGRPC.Client
 
                         Console.WriteLine($"Close app Error: {ex.Message}");
                     }
-
                     // Example 4: Open and Close by PID
                     try
                     {

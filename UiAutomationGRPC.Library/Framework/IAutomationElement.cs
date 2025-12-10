@@ -81,5 +81,10 @@ namespace UiAutomationGRPC.Library
         ///  This method return Rectangle values of element
         /// </summary>
         Rectangle GetRectangle();
+
+        /// <summary>
+        /// Returns the runtime ID of the element.
+        /// </summary>
+        string GetRuntimeId();
     }
 }
