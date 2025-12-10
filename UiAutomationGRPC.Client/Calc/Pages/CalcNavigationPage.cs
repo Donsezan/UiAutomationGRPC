@@ -1,6 +1,7 @@
 ﻿using System;
 using UiAutomationGRPC.Library;
-using UiAutomationGRPC.Library.Locators;
+using UiAutomationGRPC.Library.Selectors;
+using UiAutomationGRPC.Library.Elements;
 
 namespace UiAutomationGRPC.Client.Calc.Pages
 {
@@ -35,7 +36,7 @@ namespace UiAutomationGRPC.Client.Calc.Pages
 
         public CalcNavigationPagetLocators(UiAutomationDriver driver) => _driver = driver;
 
-        private IAutomationElement CreateElement(Func<BaseSelector> selector) => new UiAutomationAdapter(_driver, selector);
+        private IAutomationElement CreateElement(Func<BaseSelector> selector) => new UiElement(_driver, selector);
 
         private Selector Window => new Selector(new PropertyConditions().NameProperty("Calculator"));
 

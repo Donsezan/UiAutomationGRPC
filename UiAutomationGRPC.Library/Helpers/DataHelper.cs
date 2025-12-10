@@ -6,13 +6,24 @@ using System.Runtime.InteropServices;
 
 namespace UiAutomationGRPC.Library.Helpers
 {
+    /// <summary>
+    /// Helper class for data and system operations.
+    /// </summary>
     public class DataHelper
     {
+        /// <summary>
+        /// Initializes data (placeholder).
+        /// </summary>
         public static void InitData()
         {
        
         }       
 
+        /// <summary>
+        /// Gets the name of the current method or a caller frame method.
+        /// </summary>
+        /// <param name="frame">Stack frame index.</param>
+        /// <returns>Space-separated method name.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static string GetCurrentMethodName(int frame = 3)
         {
@@ -23,6 +34,11 @@ namespace UiAutomationGRPC.Library.Helpers
             return val;
         }
               
+        /// <summary>
+        /// Sets a user-level environment variable.
+        /// </summary>
+        /// <param name="variableName">Name of the variable.</param>
+        /// <param name="variableValue">Value of the variable.</param>
         public static void SetSystemGlobalVariable(string variableName, string variableValue)
         {
             try
@@ -34,12 +50,14 @@ namespace UiAutomationGRPC.Library.Helpers
             {
                 Console.WriteLine("Variable not created");
             }
-            // PwerShell scripts 
-            // Get-ChildItem Env:
-            // Remove-Item Env:\Testname
         }
 
-     
+      
+        /// <summary>
+        /// Gets a user-level environment variable.
+        /// </summary>
+        /// <param name="variableName">Name of the variable.</param>
+        /// <returns>Value of the variable.</returns>
         public static string GetSystemGlobalVariable(string variableName)
         {
             string variableValue = null;
