@@ -1,5 +1,4 @@
 using System;
-
 using UiAutomationGRPC.Library;
 using UiAutomationGRPC.Library.Locators;
 using UiAutomationGRPC.Library.Helpers;

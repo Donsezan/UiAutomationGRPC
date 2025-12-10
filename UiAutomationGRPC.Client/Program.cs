@@ -19,9 +19,16 @@ namespace UiAutomationGRPC.Client
                 {             
                     // 1. Open Calc
                     Console.WriteLine("Opening Calculator...");
+                    int processId = 0;
                     try 
                     {
-                        var processId = await driver.OpenApp("calc");
+                        var openResult = await driver.OpenApp("calc");
+                        if (!openResult.Success)
+                        {
+                            Console.WriteLine($"Failed to open app: {openResult.Message}");
+                            return;
+                        }
+                        processId = openResult.ProcessId;
                         Console.WriteLine($"App opened with Process ID: {processId}");
                     }
                     catch (Exception ex)
@@ -87,15 +94,36 @@ namespace UiAutomationGRPC.Client
                         Console.WriteLine($"Keyboard Interaction Error: {ex.Message}");
                     }
 
-                    // Example 3: Close app
+                    // Example 3: Close app by Name
                     try
                     {
-                        driver.CloseApp("CalculatorApp");
+                        var closeResult = driver.CloseApp("CalculatorApp");
+                        if (!closeResult.Success) Console.WriteLine($"CloseApp Error: {closeResult.Message}");
+                        else Console.WriteLine(closeResult.Message);
                     }
                     catch (Exception ex)
                     {
 
                         Console.WriteLine($"Close app Error: {ex.Message}");
+                    }
+
+                    // Example 4: Open and Close by PID
+                    try
+                    {
+                        Console.WriteLine("Testing CloseAppByProcessId...");
+                        var openResult2 = await driver.OpenApp("calc");
+                        if (openResult2.Success)
+                        {
+                            Console.WriteLine($"Opened calc (PID: {openResult2.ProcessId}) for PID close test.");
+                            await Task.Delay(1000); 
+                            var closePidResult = driver.CloseAppByProcessId(openResult2.ProcessId);
+                            if (closePidResult.Success) Console.WriteLine("Successfully closed by PID.");
+                            else Console.WriteLine($"Failed to close by PID: {closePidResult.Message}");
+                        }
+                    }
+                    catch(Exception ex)
+                    {
+                        Console.WriteLine($"CloseAppByProcessId Error: {ex.Message}");
                     }
 
                 }

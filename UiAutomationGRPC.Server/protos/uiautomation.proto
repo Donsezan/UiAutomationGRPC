@@ -18,6 +18,9 @@ service UiAutomationService {
   // Closes an application (Helper utility)
   rpc CloseApp (AppRequest) returns (PerformActionResponse);
 
+  // Closes an application by Process ID
+  rpc CloseAppByProcessId (CloseAppByProcessIdRequest) returns (PerformActionResponse);
+
   // Takes a screenshot of the application window (Helper utility)
   rpc TakeScreenshot (OpenAppResponse) returns (PerformActionResponse);
 
@@ -159,6 +162,10 @@ message ReflectionResponse {
 message AppRequest {
     string app_name = 1;
     string arguments = 2;
+}
+
+message CloseAppByProcessIdRequest {
+    int32 process_id = 1;
 }
 
 message OpenAppResponse {

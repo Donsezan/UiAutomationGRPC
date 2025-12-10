@@ -16,25 +16,24 @@ namespace UiAutomationGRPC.Library
             Client = new UiAutomationService.UiAutomationServiceClient(_channel);
         }
 
-        public async Task<int> OpenApp(string appName, string arguments = "")
+        //TODO: Update return type by providing Status and ProcessId
+        public async Task<(bool Success, string Message, int ProcessId)> OpenApp(string appName, string arguments = "")
         {
             var response = await Client.OpenAppAsync(new AppRequest { AppName = appName, Arguments = arguments });
-            if (!response.Success)
-            {
-                throw new Exception($"Failed to open app {appName}: {response.Message}");
-            }
-            return response.ProcessId;
+            return (response.Success, response.Message, response.ProcessId);
         }
 
-        public void CloseApp(string appName)
+        public (bool Success, string Message) CloseApp(string appName)
         {
              var response = Client.CloseApp(new AppRequest { AppName = appName });
-             if (!response.Success)
-             {
-                 // Log or throw? For now just log or ignore
-             }
+             return (response.Success, response.Message);
         }
 
+        public (bool Success, string Message) CloseAppByProcessId(int processId)
+        {
+            var response = Client.CloseAppByProcessId(new CloseAppByProcessIdRequest { ProcessId = processId });
+            return (response.Success, response.Message);
+        }
         public void Dispose()
         {
             try

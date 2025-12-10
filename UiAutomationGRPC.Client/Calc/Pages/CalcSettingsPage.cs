@@ -1,5 +1,4 @@
 ﻿using System;
-
 using UiAutomationGRPC.Library;
 using UiAutomationGRPC.Library.Locators;
 
@@ -7,14 +6,12 @@ namespace UiAutomationGRPC.Client.Calc.Pages
 {
     public class CalcSettingsPage<TPage> : BasePageObject<TPage> where TPage : BasePageObject<TPage>
     {
-        private readonly TPage _previousPage;
         private readonly CalcSettingsPageLocators _locators;
 
         public CalcSettingsPage(UiAutomationDriver driver, TPage previousPage)  : base(driver)
         {
         
             _driver = driver ?? throw new ArgumentNullException(nameof(driver));
-            _previousPage = previousPage;
             _locators = new CalcSettingsPageLocators(driver);
             // Optional: Wait for the app to be ready in constructor
             _locators.BackButton.WaitForElementExist();
