@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Protobuf Include="Protos\uiautomation.proto" GrpcServices="Client" Access="Public" />
+    <Protobuf Include="Protos\uiautomation.proto" GrpcServices="Client" Access="Internal" />
   </ItemGroup>
 
   <ItemGroup>

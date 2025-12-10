@@ -14,7 +14,7 @@ namespace UiAutomationGRPC.Client
             // Using the new Driver to organize usage
             using (var driver = new UiAutomationDriver("127.0.0.1:50051"))
             {
-                var client = driver.Client;
+                // var client = driver.Client; // Internal now
                 try 
                 {             
                     // 1. Open Calc
@@ -35,7 +35,7 @@ namespace UiAutomationGRPC.Client
                              
                     // 3. Initialize Page
                     // Wait for Calculator to be ready is implicit in PageObject or explicit here
-                    var calcPage = new CalcPage(client);
+                    var calcPage = new CalcPage(driver);
 
                     // 4. Interaction
                     Console.WriteLine("Waiting for interactions...");

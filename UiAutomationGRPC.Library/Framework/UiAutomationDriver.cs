@@ -8,7 +8,7 @@ namespace UiAutomationGRPC.Library
     public class UiAutomationDriver : IDisposable
     {
         private readonly Channel _channel;
-        public UiAutomationService.UiAutomationServiceClient Client { get; private set; }
+        internal UiAutomationService.UiAutomationServiceClient Client { get; private set; }
 
         public UiAutomationDriver(string address = "127.0.0.1:50051")
         {

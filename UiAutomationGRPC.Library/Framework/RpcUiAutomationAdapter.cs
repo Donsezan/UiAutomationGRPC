@@ -27,9 +27,9 @@ namespace UiAutomationGRPC.Library
         
         // Strategy: Resolve the element on actions.
         
-        public RpcUiAutomationAdapter(Uia.UiAutomationService.UiAutomationServiceClient client, Func<BaseSelector> selectorFunc)
+        public RpcUiAutomationAdapter(UiAutomationDriver driver, Func<BaseSelector> selectorFunc)
         {
-            _client = client;
+            _client = driver.Client;
             // BaseSelector stores the list internally. We need to access it.
             // But BaseSelector doesn't expose List easily publicly (it is protected).
             // We might need to reflect or cast if possible, or assume we can get it.

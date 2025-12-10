@@ -5,7 +5,7 @@ namespace UiAutomationGRPC.Library.Locators
 {
     public class PropertyConditions
     {
-        public List<Condition> Condition = new List<Condition>();
+        internal List<Condition> Condition = new List<Condition>();
 
         public PropertyConditions FrameworkIdProperty(string param)
         {
@@ -50,7 +50,7 @@ namespace UiAutomationGRPC.Library.Locators
         }
         
         // Helper to manually add a constructed Condition if needed
-        public void AddCondition(Condition condition)
+        internal void AddCondition(Condition condition)
         {
             Condition.Add(condition);
         }

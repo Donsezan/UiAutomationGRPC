@@ -17,8 +17,8 @@ namespace UiAutomationGRPC.Library
     
     public class UiAutomationAdapter : RpcUiAutomationAdapter
     {
-         public UiAutomationAdapter(UiAutomationService.UiAutomationServiceClient client, Func<BaseSelector> selectorFunc) 
-            : base(client, selectorFunc)
+         public UiAutomationAdapter(UiAutomationDriver driver, Func<BaseSelector> selectorFunc) 
+            : base(driver, selectorFunc)
         {
         }
     }

@@ -8,9 +8,9 @@ namespace UiAutomationGRPC.Library.Helpers
     {
         private static UiAutomationService.UiAutomationServiceClient _client;
 
-        public static void Init(UiAutomationService.UiAutomationServiceClient client)
+        public static void Init(UiAutomationDriver driver)
         {
-            _client = client;
+            _client = driver.Client;
         }
 
         public static void SendKey(string buttonKey, int count)
