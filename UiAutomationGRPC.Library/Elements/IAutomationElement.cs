@@ -1,84 +1,84 @@
 ﻿using UiAutomationGRPC.Library.Helpers;
 using System.Drawing;
 
-namespace UiAutomationGRPC.Library
+namespace UiAutomationGRPC.Library.Elements
 {
     /// <summary>
-    /// Created by Nikita Anakolov  and Viktor Yakushenko :)
+    /// Interface for automation elements.
     /// </summary>
     public interface IAutomationElement
     {
         /// <summary>
-        ///  This method processes a click on an element
+        /// Processes a click on an element.
         /// </summary>
         void Click();
 
         /// <summary>
-        ///  This method processes a click on an element relotive to Top left coordinates
+        /// Processes a click on an element relative to Top Left coordinates.
         /// </summary>
         void Click(int x, int y);
 
         /// <summary>
-        /// This method processes a double click on an element
+        /// Processes a double click on an element.
         /// </summary>
         void DoubleClick();
 
         /// <summary>
-        ///  This method processes a Hover on an element
+        /// Processes a hover on an element.
         /// </summary>
         void Hover();
 
         /// <summary>
-        ///  This method return Name field of element
+        /// Returns the Name field of the element.
         /// </summary>
         string Name();
 
         /// <summary>
-        ///  This method return ClassName field of element
+        /// Returns the ClassName field of the element.
         /// </summary>
         string ClassName();
 
         /// <summary>
-        ///  This method return AutomationId field of element
+        /// Returns the AutomationId field of the element.
         /// </summary>
         string AutomationId();
 
         /// <summary>
-        ///  This method waits when elements become clickable, that's mean that we can interact with them
+        /// Waits until the element becomes clickable/interactable.
         /// </summary>
         void WaitForElementIsClickable();
 
         /// <summary>
-        ///  This method waits when element become status exist
+        /// Waits until the element exists.
         /// </summary>
         void WaitForElementExist();
 
         /// <summary>
-        ///  This method is check for element exists or not and return bool value
+        /// Checks if the element exists.
         /// </summary>
         bool IsElementExist();
 
         /// <summary>
-        ///  This method is check is element clickable or not and return bool value
+        /// Checks if the element is clickable.
         /// </summary>
         bool IsElementClicable();
 
         /// <summary>
-        ///  This method check is element exist or not for period of time
+        /// Checks if the element exists for a period of time.
         /// </summary>
-        /// <param name="status"></param>
-        /// <param name="time"></param>
+        /// <param name="status">Expected status.</param>
+        /// <param name="time">Time in seconds to wait.</param>
         bool WaitElementExistStatusForTime(bool status, int time);
 
         /// <summary>
-        /// This method check is element clickable or not for period of time
+        /// Checks if the element is clickable for a period of time.
         /// </summary>
-        /// <param name="status"></param>
-        /// <param name="time"></param>
+        /// <param name="status">Expected status.</param>
+        /// <param name="time">Time in seconds to wait.</param>
         bool WaitElementClickableStatusForTime(bool status, int time = UsabilityTimeLimits.ApplicationLoadLimit);
 
         /// <summary>
-        ///  This method return Rectangle values of element
+        /// Returns the rectangle of the element.
         /// </summary>
         Rectangle GetRectangle();
 

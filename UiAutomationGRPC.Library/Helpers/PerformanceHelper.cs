@@ -9,10 +9,18 @@ using System.Threading.Tasks;
 
 namespace UiAutomationGRPC.Library.Helpers
 {
+    /// <summary>
+    /// Helper for performance monitoring.
+    /// </summary>
     public static class PerformanceHelper
     {
         const string appName = "TestContexts.AppName";
         const string perfomanceFilePath = "TestContexts.PerfomanceFilePath";
+        
+        /// <summary>
+        /// Gets the average CPU usage.
+        /// </summary>
+        /// <returns>Average CPU usage percentage.</returns>
         public static float GetCpu()
         {
             //const int delayBetweenMeasurement = 10;
@@ -48,6 +56,11 @@ namespace UiAutomationGRPC.Library.Helpers
             return averageCpu;
         }
 
+        /// <summary>
+        /// Saves performance data to file.
+        /// </summary>
+        /// <param name="measure">Measurement type.</param>
+        /// <param name="message">Log message.</param>
         public static void SavePerformanceData(string measure, string message)
         {
             var localDate = DateTime.Now;
@@ -58,6 +71,10 @@ namespace UiAutomationGRPC.Library.Helpers
             Console.WriteLine("({0}) ::: {1} ::: {2}", localDate, measure, message);
         }
 
+        /// <summary>
+        /// Gets the current memory usage of the process.
+        /// </summary>
+        /// <returns>Memory usage in MB.</returns>
         public static float GetMemory()
         {
             float currentMemoryUsedInMb;
@@ -82,6 +99,10 @@ namespace UiAutomationGRPC.Library.Helpers
             return currentMemoryUsedInMb;
         }
 
+        /// <summary>
+        /// Gets average memory usage from the context list.
+        /// </summary>
+        /// <returns>Average memory usage.</returns>
         public static float GetAverageMemory()
         {
             float memoryUsedSum = 0;
@@ -94,7 +115,10 @@ namespace UiAutomationGRPC.Library.Helpers
             return averageMemoryUsed;
         }
 
-
+        /// <summary>
+        /// Saves performance measures to CSV.
+        /// </summary>
+        /// <param name="measures">Array of measure messages.</param>
         public static void SavePerformanceData(string[] measures)
         {
 
@@ -120,6 +144,10 @@ namespace UiAutomationGRPC.Library.Helpers
             Logger.WriteLog("Measure done");
         }
 
+        /// <summary>
+        /// Measurements memory leaks.
+        /// </summary>
+        /// <param name="nameofMethod">Method name.</param>
         public static void WriteMemoryLeaksMeasure(string nameofMethod)
         {
             const int controlMeasureCount = 10;
@@ -155,6 +183,12 @@ namespace UiAutomationGRPC.Library.Helpers
             }
         }
 
+        /// <summary>
+        /// Tracks memory leaks by executing an action multiple times.
+        /// </summary>
+        /// <param name="action">Action to execute.</param>
+        /// <param name="nameofMethod">Method name.</param>
+        /// <param name="attempts">Attempts array.</param>
         public static void TrackMemoryLeaks(Action action, string nameofMethod, params int[] attempts)
         {
             WriteMemoryLeaksMeasure(nameofMethod + " First measure ");
@@ -167,6 +201,9 @@ namespace UiAutomationGRPC.Library.Helpers
         }
     }
 
+    /// <summary>
+    /// Message for performance measure.
+    /// </summary>
     public class MeasureMessage
     {
         public string Time { get; set; }

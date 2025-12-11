@@ -1,17 +1,36 @@
 ﻿using System.Collections.Generic;
 using UiAutomation;
 
-namespace UiAutomationGRPC.Library.Locators
+namespace UiAutomationGRPC.Library.Selectors
 {
+    /// <summary>
+    /// Search types for UI elements.
+    /// </summary>
     public enum SearchType
     {
-        Children, Descendants
+        /// <summary>
+        /// Search only immediate children.
+        /// </summary>
+        Children,
+        
+        /// <summary>
+        /// Search all descendants.
+        /// </summary>
+        Descendants
     }
 
+    /// <summary>
+    /// Builder for selector paths.
+    /// </summary>
     public class Selector : BaseSelector
     {
         private SelectorModel _selector;
         private SearchType _searchType;
+        
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Selector"/> class with initial conditions.
+        /// </summary>
+        /// <param name="propertyConditions">The initial conditions.</param>
         public Selector(PropertyConditions propertyConditions)
         {
             _searchType = SearchType.Descendants;
@@ -24,10 +43,10 @@ namespace UiAutomationGRPC.Library.Locators
         }
 
         /// <summary>
-        /// This method search child with index in parent element
+        /// Search child with index in parent element.
         /// </summary>
-        /// <param name="index">Index of child element</param>
-        /// <returns>ChildActions</returns>
+        /// <param name="index">Index of child element.</param>
+        /// <returns>ChildActions for further building.</returns>
         public ChildActions Index(int index)
         {
             var previesSelector = _selector;
@@ -42,10 +61,10 @@ namespace UiAutomationGRPC.Library.Locators
         }
 
         /// <summary>
-        /// This method search child with name
+        /// Search child containing name.
         /// </summary>
-        /// <param name="name">Name of child element</param>
-        /// <returns>ChildActions</returns>
+        /// <param name="name">Name part of child element.</param>
+        /// <returns>ChildActions for further building.</returns>
         public ChildActions NameContain(string name)
         {
             var previesSelector = _selector;
@@ -60,10 +79,10 @@ namespace UiAutomationGRPC.Library.Locators
         }
 
         /// <summary>
-        /// This method search child with name
+        /// Search child with control type.
         /// </summary>
-        /// <param name="name">Name of child element</param>
-        /// <returns>ChildActions</returns>
+        /// <param name="type">Control type of child element.</param>
+        /// <returns>ChildActions for further building.</returns>
         public ChildActions ControlType(string type)
         {
             var previesSelector = _selector;
@@ -78,10 +97,10 @@ namespace UiAutomationGRPC.Library.Locators
         }
 
         /// <summary>
-        /// This method search Descendants with conditions
+        /// Search Descendants with conditions.
         /// </summary>
-        /// <param name="propertyConditions">Conditions of Descendants element</param>
-        /// <returns>IndexNameBuild</returns>
+        /// <param name="propertyConditions">Conditions of Descendants element.</param>
+        /// <returns>MainActions for further building.</returns>
         public MainActions Descendants(PropertyConditions propertyConditions)
         {
             _searchType = SearchType.Descendants;
@@ -95,10 +114,10 @@ namespace UiAutomationGRPC.Library.Locators
         }
 
         /// <summary>
-        /// This method search Children with conditions
+        /// Search Children with conditions.
         /// </summary>
-        /// <param name="propertyConditions">Conditions of Children element</param>
-        /// <returns></returns>
+        /// <param name="propertyConditions">Conditions of Children element.</param>
+        /// <returns>MainActions for further building.</returns>
         public MainActions Children(PropertyConditions propertyConditions)
         {
             _searchType = SearchType.Children;
@@ -111,6 +130,10 @@ namespace UiAutomationGRPC.Library.Locators
             return new MainActions(List, _selector, _searchType);
         }
 
+        /// <summary>
+        /// Starts a fluent selector for Descendants.
+        /// </summary>
+        /// <returns>SelectorFluentContext.</returns>
         public SelectorFluentContext Descendants()
         {
             _searchType = SearchType.Descendants;
@@ -123,6 +146,10 @@ namespace UiAutomationGRPC.Library.Locators
             return new SelectorFluentContext(List, _selector);
         }
 
+        /// <summary>
+        /// Starts a fluent selector for Children.
+        /// </summary>
+        /// <returns>SelectorFluentContext.</returns>
         public SelectorFluentContext Children()
         {
             _searchType = SearchType.Children;
@@ -136,11 +163,17 @@ namespace UiAutomationGRPC.Library.Locators
         }
     }
 
+    /// <summary>
+    /// Builder for child actions.
+    /// </summary>
     public class ChildActions : BaseSelector
     {
         private SelectorModel _selector;
         private SearchType _searchType;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ChildActions"/> class.
+        /// </summary>
         public ChildActions(List<SelectorModel> list, SelectorModel selector, SearchType searchType)
         {
             List = list;
@@ -149,10 +182,8 @@ namespace UiAutomationGRPC.Library.Locators
         }
 
         /// <summary>
-        /// This method search Descendants with conditions
+        /// Search Descendants with conditions.
         /// </summary>
-        /// <param name="propertyConditions">Conditions of Descendants element</param>
-        /// <returns>IndexNameBuild</returns>
         public MainActions Descendants(PropertyConditions propertyConditions)
         {
             _searchType = SearchType.Descendants;
@@ -166,10 +197,8 @@ namespace UiAutomationGRPC.Library.Locators
         }
 
         /// <summary>
-        /// This method search Children with conditions
+        /// Search Children with conditions.
         /// </summary>
-        /// <param name="propertyConditions">Conditions of Children element</param>
-        /// <returns></returns>
         public MainActions Children(PropertyConditions propertyConditions)
         {
             _searchType = SearchType.Children;
@@ -183,10 +212,17 @@ namespace UiAutomationGRPC.Library.Locators
         }
     }
 
+    /// <summary>
+    /// Builder for main actions.
+    /// </summary>
     public class MainActions : BaseSelector
     {
         private SelectorModel _selector;
         private SearchType _searchType;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MainActions"/> class.
+        /// </summary>
         public MainActions(List<SelectorModel> list, SelectorModel selector, SearchType searchType)
         {
             List = list;
@@ -195,10 +231,8 @@ namespace UiAutomationGRPC.Library.Locators
         }
 
         /// <summary>
-        /// This method search Descendants with conditions
+        /// Search Descendants with conditions.
         /// </summary>
-        /// <param name="propertyConditions">Conditions of Descendants element</param>
-        /// <returns>IndexNameBuild</returns>
         public MainActions Descendants(PropertyConditions propertyConditions)
         {
             _searchType = SearchType.Descendants;
@@ -212,10 +246,8 @@ namespace UiAutomationGRPC.Library.Locators
         }
 
         /// <summary>
-        /// This method search Children with conditions
+        /// Search Children with conditions.
         /// </summary>
-        /// <param name="propertyConditions">Conditions of Children element</param>
-        /// <returns></returns>
         public MainActions Children(PropertyConditions propertyConditions)
         {
             _searchType = SearchType.Children;
@@ -229,10 +261,8 @@ namespace UiAutomationGRPC.Library.Locators
         }
 
         /// <summary>
-        /// This method search child with index in parent element
+        /// Search child with index in parent element.
         /// </summary>
-        /// <param name="index">Index of child element</param>
-        /// <returns>ChildActions</returns>
         public ChildActions Index(int index)
         {
             var previesSelector = _selector;
@@ -247,10 +277,8 @@ namespace UiAutomationGRPC.Library.Locators
         }
 
         /// <summary>
-        /// This method search child with name
+        /// Search child with name.
         /// </summary>
-        /// <param name="name">Name of child element</param>
-        /// <returns>ChildActions</returns>
         public ChildActions NameContain(string name)
         {
             var previesSelector = _selector;

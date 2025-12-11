@@ -4,44 +4,27 @@ using System.Drawing;
 using System.Linq;
 using System.Threading;
 using UiAutomationGRPC.Library.Helpers;
-using UiAutomationGRPC.Library.Locators;
-
+using UiAutomationGRPC.Library.Selectors;
 using Uia = global::UiAutomation;
 
-namespace UiAutomationGRPC.Library
+namespace UiAutomationGRPC.Library.Elements
 {
-    public class RpcUiAutomationAdapter : IAutomationElement
+    /// <summary>
+    /// Represents a UI element that interacts with the UI Automation gRPC service.
+    /// </summary>
+    public class UiElement : IAutomationElement
     {
         private readonly Uia.UiAutomationService.UiAutomationServiceClient _client;
         private readonly List<SelectorModel> _selectors;
         
-        // Cache the runtime ID once found? 
-        // Or re-find every time? The original adapter finds it every time "Build" is called.
-        // Let's store the resolved RuntimeId if we want, or simple resolve on demand.
-        // To stick to "Logic on server", we really just want to pass the path (selectors).
-        // However, the FindElement RPC returns a RuntimeID. 
-        // We can either:
-        // 1. Resolve the path to a RuntimeID once (or lazily) effectively "finding" it.
-        // 2. Pass the full chain every time (not supported by current Proto structure which takes StartRuntimeId + Condition).
-        // So we must resolve step-by-step or finding the leaf element first.
-        
-        // Strategy: Resolve the element on actions.
-        
-        public RpcUiAutomationAdapter(UiAutomationDriver driver, Func<BaseSelector> selectorFunc)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="UiElement"/> class.
+        /// </summary>
+        /// <param name="driver">The UI automation driver.</param>
+        /// <param name="selectorFunc">The selector builder function.</param>
+        public UiElement(UiAutomationDriver driver, Func<BaseSelector> selectorFunc)
         {
             _client = driver.Client;
-            // BaseSelector stores the list internally. We need to access it.
-            // But BaseSelector doesn't expose List easily publicly (it is protected).
-            // We might need to reflect or cast if possible, or assume we can get it.
-            // Actually, `BaseSelector` has `protected List<SelectorModel> List`.
-            // We can't access it unless we inherit or change access.
-            // However, the `Selector` class adds to it.
-            // Let's assume we can get it via a hack or we update BaseSelector to expose it.
-            // MODIFY BaseSelector to expose it? Or pass the list directly?
-            // "Func<BaseSelector>" returns the builder. 
-            // The original code: new UiAutomationAdapter(() => new Selector()...);
-            
-            // "Func<BaseSelector>" returns the builder. 
              var baseSelector = selectorFunc();
              _selectors = baseSelector.GetSelectors();
         }
@@ -58,7 +41,6 @@ namespace UiAutomationGRPC.Library
                     Scope = ToProtoScope(selector.SearchType),
                 };
                 
-                // SelectorModel now holds List<UiAutomation.Condition> directly
                 if (selector.Condition != null && selector.Condition.Count > 0)
                 {
                     if (selector.Condition.Count == 1)
@@ -77,9 +59,6 @@ namespace UiAutomationGRPC.Library
                      req.Condition = new Uia.Condition { TrueCondition = true };
                 }
 
-                // Handle AdditionalSearchProperty (Index or Name Contain) if needed
-                // For now, relying on FindElement with properties.
-                
                 var resp = _client.FindElement(req);
                 currentRuntimeId = resp.RuntimeId;
             }
@@ -92,66 +71,62 @@ namespace UiAutomationGRPC.Library
             return Uia.TreeScope.Descendants; // Default
         }
 
-        private string _cachedRuntimeId;
         private string GetId()
         {
-             // We can cache it if we assume it doesn't change runtime (mostly true for some apps, not others).
-             // But to be robust like "WaitForElement", we might want to resolve again if needed.
-             // For now, let's just resolve.
              return ResolveElement();
         }
 
+        /// <inheritdoc />
         public void Click()
         {
             var id = GetId();
             _client.PerformAction(new Uia.PerformActionRequest { RuntimeId = id, Action = Uia.ActionType.Click });
         }
 
+        /// <inheritdoc />
         public void Click(int x, int y)
         {
-            // Relative click? Proto might need info.
-            // Or we assume "Click" with args?
-            // Proto has "MoveTo" then "Click"?
-            // Or "Click" action.
-            // Let's ignore x,y for basic Click or implement Move+Click if Proto supports.
-            // Update Proto later if needed.
             Click(); 
         }
 
+        /// <inheritdoc />
         public void DoubleClick()
         {
              var id = GetId();
             _client.PerformAction(new Uia.PerformActionRequest { RuntimeId = id, Action = Uia.ActionType.DoubleClick });
         }
 
+        /// <inheritdoc />
         public void Hover()
         {
              var id = GetId();
-             // Maybe "MoveTo"?
             _client.PerformAction(new Uia.PerformActionRequest { RuntimeId = id, Action = Uia.ActionType.MoveTo });
         }
 
+        /// <inheritdoc />
         public string Name()
         {
             var id = GetId();
             return _client.GetProperty(new Uia.GetPropertyRequest { RuntimeId = id, PropertyName = "Name" }).Value;
         }
 
+        /// <inheritdoc />
         public string ClassName()
         {
             var id = GetId();
             return _client.GetProperty(new Uia.GetPropertyRequest { RuntimeId = id, PropertyName = "ClassName" }).Value;
         }
 
+        /// <inheritdoc />
         public string AutomationId()
         {
             var id = GetId();
             return _client.GetProperty(new Uia.GetPropertyRequest { RuntimeId = id, PropertyName = "AutomationId" }).Value;
         }
 
+        /// <inheritdoc />
         public void WaitForElementIsClickable()
         {
-            // Polling on Client side
              var stopWatch = new System.Diagnostics.Stopwatch();
             stopWatch.Start();
             while (stopWatch.Elapsed.TotalSeconds < UsabilityTimeLimits.ApplicationLoadLimit)
@@ -159,8 +134,6 @@ namespace UiAutomationGRPC.Library
                 try
                 {
                     var id = ResolveElement();
-                    // Checking if resolve works is essentially "Exist".
-                    // "Clickable" usually means resolving + maybe check "IsEnabled"?
                     if (!string.IsNullOrEmpty(id)) return;
                 }
                 catch {}
@@ -169,6 +142,7 @@ namespace UiAutomationGRPC.Library
             throw new TimeoutException("Element not clickable");
         }
 
+        /// <inheritdoc />
         public void WaitForElementExist()
         {
              var stopWatch = new System.Diagnostics.Stopwatch();
@@ -186,6 +160,7 @@ namespace UiAutomationGRPC.Library
              throw new TimeoutException("Element not found");
         }
 
+        /// <inheritdoc />
         public bool IsElementExist()
         {
             try
@@ -199,14 +174,15 @@ namespace UiAutomationGRPC.Library
             }
         }
 
+        /// <inheritdoc />
         public bool IsElementClicable()
         {
              return IsElementExist();
         }
 
+        /// <inheritdoc />
         public bool WaitElementExistStatusForTime(bool status, int time)
         {
-            // Simplified implementation
             var start = DateTime.Now;
             while((DateTime.Now - start).TotalSeconds < time)
             {
@@ -217,16 +193,19 @@ namespace UiAutomationGRPC.Library
             return !status;
         }
 
+        /// <inheritdoc />
         public bool WaitElementClickableStatusForTime(bool status, int time = UsabilityTimeLimits.ApplicationLoadLimit)
         {
              return WaitElementExistStatusForTime(status, time);
         }
 
+        /// <inheritdoc />
         public Rectangle GetRectangle()
         {
              throw new NotImplementedException("Rectangle retrieval via gRPC not yet implemented fully.");
         }
 
+        /// <inheritdoc />
         public string GetRuntimeId()
         {
             return GetId();
