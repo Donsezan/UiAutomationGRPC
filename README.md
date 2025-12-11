@@ -1,86 +1,88 @@
 # UiAutomationGRPC
 
-A generic gRPC-based Windows UI Automation service and client. This project allows you to drive Windows UI Automation remotely or locally via gRPC messages, enabling cross-language or distributed UI testing and automation.
+**A generic, decoupled Windows UI Automation framework using gRPC.**
 
-## Project Overview
+## The Problem
+Standard Windows UI Automation code is often tightly coupled to the machine running the automation. This creates challenges for:
+-   **Remote Automation**: Driving UI on a separate machine (e.g., a dedicated test rig) from a developer's workstation or CI runner.
+-   **Language Interop**: Writing test logic in languages other than C#/.NET (since standard UIA is .NET/COM based).
+-   **Separation of Concerns**: Mixing low-level "how to click" logic with high-level "business workflow" logic.
 
-- **Server**: A Windows Service (or console app) that hosts a gRPC server. It exposes endpoints to find UI elements, query properties, perform actions (Click, Invoke, etc.), and manage application processes.
-- **Client**: A sample .NET client that connects to the server to demonstrate automation tasks, such as opening an application, finding elements, and performing interactions.
+## The Solution
+**UiAutomationGRPC** solves this by splitting the automation into two distinct components:
 
-## Prerequisites
+1.  **The Server (Active Driver)**: A Windows Service running on the target machine. It has full access to the Windows desktop and exposes the UI Automation capabilities via a generic gRPC API.
+2.  **The Client (Test Controller)**: A lightweight library (SDK) that sends commands to the Server. It can run anywhere network-reachable to the server.
 
-- **OS**: Windows (Required for UI Automation libraries)
-- **Runtime**: .NET Framework 4.7.2 or later
+This architecture allows you to write tests that say "Find the button called 'Submit'" without worrying about *how* that command is executed on the specific Windows instance.
 
-## Getting Started
+## Architecture
 
-### 1. Build the Solution
+```mermaid
+graph TD
+    subgraph "Client Side (Test Runner)"
+        ClientApp[Client Application] -->|Uses| Lib[UiAutomationGRPC.Library]
+        Lib -->|gRPC Request| Proto[Protocol Buffers]
+    end
 
-The project uses SDK-style projects targeting .NET Framework 4.7.2. You can build it using Visual Studio or the .NET CLI.
+    subgraph "Network Boundary"
+        Proto -.->|gRPC over HTTP/2| ServerEndpoint[Server Endpoint :50051]
+    end
 
-```powershell
-# Build the Server
-cd UiAutomationGRPC.Server
-dotnet build
+    subgraph "Server Side (Target Machine)"
+        ServerEndpoint -->|Handled By| Service[UiAutomationGRPC.Server]
+        Service -->|Calls| UIA[Windows UI Automation API]
+        UIA -->|Drives| TargetApp[Target Application\ne.g. Calculator]
+    end
 
-# Build the Client
-cd ../UiAutomationGRPC.Client
-dotnet build
+    style ClientApp fill:#f9f,stroke:#333
+    style Service fill:#bbf,stroke:#333
+    style TargetApp fill:#bfb,stroke:#333
 ```
-
-### 2. Run the Server
-
-Navigate to the server output directory (e.g., `bin/Debug/net472`) and run the executable.
-
-```powershell
-.\UiAutomationGRPC.Server.exe
-```
-
-The server will start and listen for gRPC connections.
-
-### 3. Run the Client
-
-Navigate to the client output directory and run the client.
-
-```powershell
-.\UiAutomationGRPC.Client.exe
-```
-
-The client will attempt to connect to the server (default: `localhost`) and run the demonstrated automation sequence.
 
 ## Project Structure
 
+-   **[UiAutomationGRPC.Server](./UiAutomationGRPC.Server)**
+    The generic host service. It implements the gRPC definitions and translates them into actual Windows UI Automation calls (e.g., `AutomationElement.Find(...)`). It can be installed as a Windows Service.
+
+-   **[UiAutomationGRPC.Library](./UiAutomationGRPC.Library)**
+    The client-side SDK. It hides the complexity of gRPC and provides a clean C# API (e.g., `driver.FindElement(...)`) for developers to write automation scripts.
+
+-   **[UiAutomationGRPC.Client](./UiAutomationGRPC.Client)**
+    A sample console application demonstrating how to use the Library to automate the Windows Calculator. It serves as a reference implementation for your own test projects.
+
+## Getting Started
+
+### 1. Requirements
+-   **Server Machine**: Windows OS, Administrator privileges (for Service installation).
+-   **Development**: .NET Framework 4.7.2 or later.
+
+### 2. Running the Server
+You can run the server as a console app for testing, or install it as a service for production.
+
+```powershell
+# From UiAutomationGRPC.Server/bin/Debug/net472/
+.\UiAutomationGRPC.Server.exe
 ```
-UiAutomationGRPC
-├── UiAutomationGRPC.Server    # gRPC Server implementation
-│   ├── protos/                # gRPC Service definitions (.proto)
-│   ├── MainService.cs         # Service entry point
-│   ├── UiAutomationServiceImplementation.cs # Core logic
-│   └── UiAutomationGRPC.Server.csproj
-├── UiAutomationGRPC.Client    # gRPC Client sample
-└── README.md
+
+### 3. Writing a Client
+Reference `UiAutomationGRPC.Library` in your project and connect to the server:
+
+```csharp
+using UiAutomationGRPC.Library;
+
+// Connect to localhost (or remote IP)
+using (var driver = new UiAutomationDriver("127.0.0.1:50051"))
+{
+    // Find generic element
+    var calcWindow = driver.FindElement(new SelectorModel 
+    { 
+        Conditions = new PropertyConditions().NameProperty("Calculator") 
+    });
+    
+    // Interact
+    // ...
+}
 ```
 
-## API Reference
-
-The service is defined in `uiautomation.proto`.
-
-### Service: `UiAutomationService`
-
-| Method | Description |
-| :--- | :--- |
-| `FindElement` | Search for a UI element using conditions like Name, AutomationId, or ControlType. |
-| `PerformAction` | Interact with an element (Invoke, Click, SetValue, etc.). |
-| `GetProperty` | Retrieve a specific property value from an element. |
-| `OpenApp` | Launch an application by name or path. |
-| `Reflect` | query metadata about supported automation properties and patterns. |
-| `...` | ... |
-
-### Key Concepts
-
-- **Runtime ID**: A string handle returned by `FindElement` that uniquely identifies a UI element interface for subsequent calls.
-
-
-## License
-
-See [LICENSE](LICENSE) file.
+See **[UiAutomationGRPC.Client/README.md](./UiAutomationGRPC.Client/README.md)** for a full tutorial.
