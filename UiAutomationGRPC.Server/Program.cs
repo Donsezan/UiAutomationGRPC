@@ -1,33 +1,23 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.ServiceProcess;
-using System.Text;
-using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using UiAutomationGRPC.Server.Services;
 
 namespace UiAutomationGRPC.Server
 {
     static class Program
     {
-        /// <summary>
-        /// The main entry point for the application.
-        /// </summary>
-        static void Main(string[] args)
+        public static void Main(string[] args)
         {
-            if (Environment.UserInteractive || (args.Length > 0 && args[0] == "--console"))
-            {
-                var service = new MainService();
-                service.RunAsConsole(args);
-            }
-            else
-            {
-                ServiceBase[] ServicesToRun;
-                ServicesToRun = new ServiceBase[]
-                {
-                    new MainService()
-                };
-                ServiceBase.Run(ServicesToRun);
-            }
+            CreateHostBuilder(args).Build().Run();
         }
+
+        public static IHostBuilder CreateHostBuilder(string[] args) =>
+            Host.CreateDefaultBuilder(args)
+                .UseWindowsService()
+                .ConfigureServices((hostContext, services) =>
+                {
+                    services.AddHostedService<GrpcHostedService>();
+                });
     }
 }

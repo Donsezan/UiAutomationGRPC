@@ -10,8 +10,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Automation;
 using UiAutomation;
-using System.Windows.Automation;
-using UiAutomation;
 using PropertyCondition = System.Windows.Automation.PropertyCondition;
 using System.Drawing;
 using System.Drawing.Imaging;
