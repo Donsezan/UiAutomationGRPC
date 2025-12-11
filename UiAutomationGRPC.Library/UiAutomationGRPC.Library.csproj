@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <Protobuf Include="Protos\uiautomation.proto" GrpcServices="Client" Access="Internal" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
