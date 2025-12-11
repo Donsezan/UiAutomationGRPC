@@ -4,6 +4,17 @@
     <TargetFramework>net472</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+  
+    <PackageId>UiAutomationGRPC</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>Nikita A</Authors>
+    <Description>A client library for remote Windows UI Automation using gRPC. Features a fluent selector API and driver for efficient UI testing and interaction.</Description>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/Donsezan/UiAutomationGRPC</RepositoryUrl>
+    <PackageTags>grpc; ui automation; windows; GUI automation</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>
