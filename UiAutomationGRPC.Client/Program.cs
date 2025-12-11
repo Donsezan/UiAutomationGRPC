@@ -223,6 +223,9 @@ namespace UiAutomationGRPC.Client
                 Console.WriteLine($"Close app Error: {ex.Message}");
             }
 
+            /*
+             * Disabled due to calc changing process IDs on each launch.
+             * 
             // Example B: Open and Close by PID
             // We open a new instance just to close it by PID.
             try
@@ -232,18 +235,19 @@ namespace UiAutomationGRPC.Client
                 if (openResult2.Success)
                 {
                     Console.WriteLine($"Opened calc (PID: {openResult2.ProcessId}) for PID close test.");
-                    await Task.Delay(1000); 
+                    await Task.Delay(1000);
                     var closePidResult = driver.CloseAppByProcessId(openResult2.ProcessId);
-                    if (closePidResult.Success) 
+                    if (closePidResult.Success)
                         Console.WriteLine("Successfully closed by PID.");
-                    else 
+                    else
                         Console.WriteLine($"Failed to close by PID: {closePidResult.Message}");
                 }
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 Console.WriteLine($"CloseAppByProcessId Error: {ex.Message}");
             }
+            */
         }
     }
 }
