@@ -91,8 +91,11 @@ jobs:
       with:
         dotnet-version: 8.0.x
 
+    - name: Build Library
+      run: dotnet build ${{ env.Library_Project_Path }} -c Release
+
     - name: Pack Library
-      run: dotnet pack ${{ env.Library_Project_Path }} -c Release -o ./artifacts
+      run: dotnet pack ${{ env.Library_Project_Path }} -c Release -o ./artifacts --no-build
 
     - name: Push to NuGet
       run: dotnet nuget push "artifacts/*.nupkg" ^
