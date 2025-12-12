@@ -20,24 +20,17 @@ This architecture allows you to write tests that say "Find the button called 'Su
 
 ```mermaid
 graph TD
-    subgraph "Client Side (Test Runner)"
-        ClientApp[Client Application] -->|Uses| Lib[UiAutomationGRPC.Library]
-        Lib -->|gRPC Request| Proto[Protocol Buffers]
-    end
+    Client[Client App] -->|gRPC Command| Server[UiAutomation Service]
+    Server -->|UIA API| Target[Target Application]
+    Target -.->|UI State| Server
+    Server -.->|Status/Response| Client
+    classDef client fill:#0d548c,stroke:#4c381e,stroke-width:2px;
+    classDef server fill:#4c381e,stroke:#0d548c,stroke-width:2px;
+    classDef target fill:#0d548c,stroke:#4c381e,stroke-width:2px;
 
-    subgraph "Network Boundary"
-        Proto -.->|gRPC over HTTP/2| ServerEndpoint[Server Endpoint :50051]
-    end
-
-    subgraph "Server Side (Target Machine)"
-        ServerEndpoint -->|Handled By| Service[UiAutomationGRPC.Server]
-        Service -->|Calls| UIA[Windows UI Automation API]
-        UIA -->|Drives| TargetApp[Target Application\ne.g. Calculator]
-    end
-
-    style ClientApp fill:#f9f,stroke:#333
-    style Service fill:#bbf,stroke:#333
-    style TargetApp fill:#bfb,stroke:#333
+    class Client client;
+    class Server server;
+    class Target target;
 ```
 
 ## Project Structure
