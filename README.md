@@ -24,11 +24,9 @@ graph TD
     Server -->|UIA API| Target[Target Application]
     Target -.->|UI State| Server
     Server -.->|Status/Response| Client
-
-    %% GitHub-like styling
-    classDef client fill:#ddf4ff,stroke:#0969da,stroke-width:2px;
-    classDef server fill:#fff8c5,stroke:#bf8700,stroke-width:2px;
-    classDef target fill:#dafbe1,stroke:#1a7f37,stroke-width:2px;
+    classDef client fill:#0d548c,stroke:#4c381e,stroke-width:2px;
+    classDef server fill:#4c381e,stroke:#0d548c,stroke-width:2px;
+    classDef target fill:#0d548c,stroke:#4c381e,stroke-width:2px;
 
     class Client client;
     class Server server;
