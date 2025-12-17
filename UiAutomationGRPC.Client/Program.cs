@@ -142,6 +142,36 @@ namespace UiAutomationGRPC.Client
             {
                 Console.WriteLine($"Keyboard Interaction Error: {ex.Message}");
             }
+
+            // C. Mouse Interactions (Global)
+            try
+            {
+                Console.WriteLine("Performing Global Mouse interactions...");
+                
+                // Initialize the MouseHelper with the driver
+                UiAutomationGRPC.Library.Helpers.MouseHelper.Init(driver);
+
+                // Move mouse to some coordinates (0,0) and back to center just as a demo
+                UiAutomationGRPC.Library.Helpers.MouseHelper.MoveMouseTo(0, 0);
+                await Task.Delay(500);
+                UiAutomationGRPC.Library.Helpers.MouseHelper.MoveMouseTo(500, 500);
+                await Task.Delay(500);
+
+                // Demonstration of right click
+                Console.WriteLine("Performing Right Click...");
+                UiAutomationGRPC.Library.Helpers.MouseHelper.ClickRightButton();
+                
+                await Task.Delay(500);
+                
+                // Close context menu if opened
+                UiAutomationGRPC.Library.Helpers.MouseHelper.ClickLeftButton();
+
+                Console.WriteLine("Mouse interactions completed.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Mouse Interaction Error: {ex.Message}");
+            }
         }
 
         /// <summary>

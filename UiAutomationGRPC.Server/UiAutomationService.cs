@@ -60,6 +60,12 @@ namespace UiAutomationGRPC.Server
 
         public override Task<PerformActionResponse> PerformAction(PerformActionRequest request, ServerCallContext context)
         {
+            // If RuntimeId is empty, we handle global/mouse actions that don't require an element.
+            if (string.IsNullOrEmpty(request.RuntimeId))
+            {
+                return HandleGlobalAction(request);
+            }
+
             if (!_elementCache.TryGetValue(request.RuntimeId, out var element))
             {
                 throw new RpcException(new Status(StatusCode.NotFound, "Element not found in cache."));
@@ -81,7 +87,7 @@ namespace UiAutomationGRPC.Server
                              ecPattern.Expand();
                         else if (request.Arguments.Count > 0 && request.Arguments[0].ToLower() == "collapse")
                              ecPattern.Collapse();
-                        else // Default toggle behavior if no arg? or just generic Expand
+                        else 
                              ecPattern.Expand(); 
                         break;
                     case ActionType.SetValue:
@@ -105,8 +111,23 @@ namespace UiAutomationGRPC.Server
                              throw new NotSupportedException("Click not fully implemented without P/Invoke. Using InvokePattern is recommended.");
                          }
                          break;
+                    // For element-specific move/click, we could calculate center and call global helpers here too
+                    case ActionType.MoveTo:
+                        if (element.TryGetCurrentPattern(WindowPattern.Pattern, out _))
+                        {
+                            // Window logic
+                        }
+                        var rect = element.Current.BoundingRectangle;
+                        if (rect.Width > 0 && rect.Height > 0)
+                        {
+                            int x = (int)(rect.X + rect.Width / 2);
+                            int y = (int)(rect.Y + rect.Height / 2);
+                            NativeMethods.SetCursorPos(x, y);
+                        }
+                        break;
                     default:
-                        throw new NotSupportedException($"Action {request.Action} is not supported.");
+                        // Try global action fallback if it makes sense, or throw
+                        throw new NotSupportedException($"Action {request.Action} is not supported on an element.");
                 }
 
                 return Task.FromResult(new PerformActionResponse { Success = true, Message = "Action performed successfully." });
@@ -115,6 +136,76 @@ namespace UiAutomationGRPC.Server
             {
                  return Task.FromResult(new PerformActionResponse { Success = false, Message = $"Error performing action: {ex.Message}" });
             }
+        }
+
+        private Task<PerformActionResponse> HandleGlobalAction(PerformActionRequest request)
+        {
+            try
+            {
+                 switch (request.Action)
+                 {
+                     case ActionType.Move:
+                         if (request.Arguments.Count < 2) throw new ArgumentException("Move requires x and y arguments.");
+                         int x = int.Parse(request.Arguments[0]);
+                         int y = int.Parse(request.Arguments[1]);
+                         NativeMethods.SetCursorPos(x, y);
+                         break;
+                     case ActionType.LeftClick:
+                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+                         break;
+                     case ActionType.RightClick:
+                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0);
+                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
+                         break;
+                     case ActionType.MouseMiddleClick:
+                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, 0);
+                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0);
+                         break;
+                     case ActionType.LeftDown:
+                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+                         break;
+                     case ActionType.LeftUp:
+                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+                         break;
+                     case ActionType.RightDown:
+                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0);
+                         break;
+                     case ActionType.RightUp:
+                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
+                         break;
+                     case ActionType.MousWeelScroll:
+                         if (request.Arguments.Count < 1) throw new ArgumentException("Scroll requires 'steps' argument.");
+                         int steps = int.Parse(request.Arguments[0]);
+                         // WHEEL_DELTA is 120. steps * 120
+                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_WHEEL, 0, 0, steps * 120, 0);
+                         break;
+                     default:
+                         throw new NotSupportedException($"Global Action {request.Action} is not supported.");
+                 }
+                 return Task.FromResult(new PerformActionResponse { Success = true, Message = "Global action performed." });
+            }
+            catch (Exception ex)
+            {
+                return Task.FromResult(new PerformActionResponse { Success = false, Message = $"Error performing global action: {ex.Message}" });
+            }
+        }
+
+        private static class NativeMethods
+        {
+            [System.Runtime.InteropServices.DllImport("user32.dll")]
+            public static extern bool SetCursorPos(int x, int y);
+
+            [System.Runtime.InteropServices.DllImport("user32.dll")]
+            public static extern void mouse_event(int dwFlags, int dx, int dy, int dwData, int dwExtraInfo);
+
+            public const int MOUSEEVENTF_LEFTDOWN = 0x02;
+            public const int MOUSEEVENTF_LEFTUP = 0x04;
+            public const int MOUSEEVENTF_RIGHTDOWN = 0x08;
+            public const int MOUSEEVENTF_RIGHTUP = 0x10;
+            public const int MOUSEEVENTF_MIDDLEDOWN = 0x20;
+            public const int MOUSEEVENTF_MIDDLEUP = 0x40;
+            public const int MOUSEEVENTF_WHEEL = 0x0800;
         }
 
         public override Task<GetPropertyResponse> GetProperty(GetPropertyRequest request, ServerCallContext context)
