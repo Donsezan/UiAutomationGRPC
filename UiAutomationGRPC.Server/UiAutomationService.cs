@@ -608,6 +608,7 @@ namespace UiAutomationGRPC.Server
                 case "classname": return AutomationElement.ClassNameProperty;
                 case "controltype": return AutomationElement.ControlTypeProperty;
                 case "isenabled": return AutomationElement.IsEnabledProperty;
+                case "boundingrectangle": return AutomationElement.BoundingRectangleProperty;
                 // Add more as needed
                 default: throw new ArgumentException($"Unknown property: {name}");
             }

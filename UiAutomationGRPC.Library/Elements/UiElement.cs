@@ -202,7 +202,23 @@ namespace UiAutomationGRPC.Library.Elements
         /// <inheritdoc />
         public Rectangle GetRectangle()
         {
-             throw new NotImplementedException("Rectangle retrieval via gRPC not yet implemented fully.");
+            var id = GetId();
+            var resp = _client.GetProperty(new Uia.GetPropertyRequest { RuntimeId = id, PropertyName = "BoundingRectangle" });
+            
+            if (!resp.Success) 
+                throw new Exception($"Failed to get rectangle: {resp.Message}");
+
+            // Parse "X,Y,Width,Height"
+            var parts = resp.Value.Split(new[] { ',', ';', ':' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 4 && 
+                double.TryParse(parts[0], out double x) && 
+                double.TryParse(parts[1], out double y) &&
+                double.TryParse(parts[2], out double w) &&
+                double.TryParse(parts[3], out double h))
+            {
+                return new Rectangle((int)x, (int)y, (int)w, (int)h);
+            }
+            throw new Exception($"Failed to parse rectangle from '{resp.Value}'");
         }
 
         /// <inheritdoc />

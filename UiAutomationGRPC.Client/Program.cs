@@ -148,23 +148,44 @@ namespace UiAutomationGRPC.Client
             {
                 Console.WriteLine("Performing Global Mouse interactions...");
                 
-                // Initialize the MouseHelper with the driver
+                // Initialize the MouseHelper
                 UiAutomationGRPC.Library.Helpers.MouseHelper.Init(driver);
 
-                // Move mouse to some coordinates (0,0) and back to center just as a demo
-                UiAutomationGRPC.Library.Helpers.MouseHelper.MoveMouseTo(0, 0);
-                await Task.Delay(500);
-                UiAutomationGRPC.Library.Helpers.MouseHelper.MoveMouseTo(500, 500);
-                await Task.Delay(500);
+                // Scenario: 2 + 2 = 4 using coordinates
+                // 1. Find elements, get their bounds, move to center, click.
+                
+                // Re-using locators:
+                var locators = new CalcPageLocators(driver);
+                
+                // Helper to perform the global click sequence
+                async Task ClickElementGlobally(UiAutomationGRPC.Library.Elements.IAutomationElement element, string desc)
+                {
+                    try 
+                    {
+                        var rect = element.GetRectangle();
+                        int centerX = rect.Left + rect.Width / 2;
+                        int centerY = rect.Top + rect.Height / 2;
+                        
+                        Console.WriteLine($"Moving to {desc} at ({centerX}, {centerY})...");
+                        UiAutomationGRPC.Library.Helpers.MouseHelper.MoveMouseTo(centerX, centerY);
+                        await Task.Delay(200);
+                        UiAutomationGRPC.Library.Helpers.MouseHelper.ClickLeftButton();
+                        await Task.Delay(200);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Failed to click {desc}: {ex.Message}");
+                    }
+                }
 
-                // Demonstration of right click
-                Console.WriteLine("Performing Right Click...");
-                UiAutomationGRPC.Library.Helpers.MouseHelper.ClickRightButton();
-                
-                await Task.Delay(500);
-                
-                // Close context menu if opened
-                UiAutomationGRPC.Library.Helpers.MouseHelper.ClickLeftButton();
+                await ClickElementGlobally(locators.ButtonTwo, "Button Two");
+                await ClickElementGlobally(locators.ButtonPlus, "Button Plus");
+                await ClickElementGlobally(locators.ButtonTwo, "Button Two");
+                await ClickElementGlobally(locators.ButtonEqual, "Button Equal");
+
+                await Task.Delay(1000);
+                var resultName = calcPage.GetResult();
+                Console.WriteLine($"Global Mouse Result: {resultName}");
 
                 Console.WriteLine("Mouse interactions completed.");
             }
