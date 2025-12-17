@@ -15,6 +15,7 @@
     <RepositoryUrl>https://github.com/Donsezan/UiAutomationGRPC</RepositoryUrl>
     <PackageTags>grpc; ui automation; windows; GUI automation</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <NoWarn>$(NoWarn);NU5100</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -34,11 +35,20 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Google.Protobuf" Version="3.26.1" />
-    <PackageReference Include="Grpc.Core" Version="2.46.6" />
+    <PackageReference Include="Grpc.Core" Version="2.46.6">
+      <ExcludeAssets>content;contentfiles</ExcludeAssets>
+    </PackageReference>
     <PackageReference Include="Grpc.Tools" Version="2.62.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="**\grpc_csharp_ext.x64.dll" Pack="false" />
+    <Content Update="**\grpc_csharp_ext.x86.dll" Pack="false" />
+    <None Update="**\grpc_csharp_ext.x64.dll" Pack="false" />
+    <None Update="**\grpc_csharp_ext.x86.dll" Pack="false" />
   </ItemGroup>
 
 </Project>
