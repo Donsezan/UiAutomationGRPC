@@ -15,7 +15,7 @@ namespace UiAutomationGRPC.Library
         /// <summary>
         /// Internal gRPC client.
         /// </summary>
-        internal UiAutomationService.UiAutomationServiceClient Client { get; private set; }
+        public UiAutomationService.UiAutomationServiceClient Client { get; private set; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="UiAutomationDriver"/> class.
@@ -87,6 +87,20 @@ namespace UiAutomationGRPC.Library
 
             var response = await Client.TakeScreenshotAsync(request);
             return (response.Success, response.Message, response.ImageData.ToByteArray());
+        }
+
+        /// <summary>
+        /// Gets children of an element.
+        /// </summary>
+        /// <param name="runtimeId">The runtime ID of the parent element.</param>
+        /// <returns>A tuple containing success status, message, and list of elements.</returns>
+        public async Task<(bool Success, string Message, System.Collections.Generic.List<ElementResponse> Elements)> GetChildren(string runtimeId = "")
+        {
+            var request = new GetChildrenRequest { RuntimeId = runtimeId ?? "" };
+            var response = await Client.GetChildrenAsync(request);
+            var list = new System.Collections.Generic.List<ElementResponse>();
+            if (response.Elements != null) list.AddRange(response.Elements);
+            return (response.Success, response.Message, list);
         }
 
         /// <summary>

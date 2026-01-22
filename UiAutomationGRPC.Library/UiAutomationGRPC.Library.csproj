@@ -19,7 +19,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Protobuf Include="Protos\uiautomation.proto" GrpcServices="Client" Access="Internal" />
+    <Protobuf Include="Protos\uiautomation.proto" GrpcServices="Client" Access="Public" />
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
