@@ -98,7 +98,21 @@ namespace UiAutomationGRPC.MCP
                         },
                         ["required"] = new JArray { "runtime_id", "property_name" }
                     }
-                }
+                },
+                new JObject
+                {
+                    ["name"] = "get_application_map",
+                    ["description"] = "Retrieves a simplified recursive element tree (map) of the application or element UI structure.",
+                    ["inputSchema"] = new JObject
+                    {
+                        ["type"] = "object",
+                        ["properties"] = new JObject
+                        {
+                             ["runtime_id"] = new JObject { ["type"] = "string", ["description"] = "Root element runtime ID. Leave empty for desktop/active window." },
+                             ["depth"] = new JObject { ["type"] = "string", ["description"] = "Depth of retrieval (not yet fully supported, fetches descendants)" }
+                        }
+                    }
+                },
                 new JObject
                 {
                     ["name"] = "get_children",
@@ -127,6 +141,7 @@ namespace UiAutomationGRPC.MCP
                     }
                 }
             };
+            return tools;
         }
 
         public async Task<JToken> ExecuteToolAsync(string name, JObject args)
@@ -149,10 +164,8 @@ namespace UiAutomationGRPC.MCP
                         return await GetChildren(args);
                     case "close_app":
                         return await CloseApp(args);
-                    case "get_children":
-                        return await GetChildren(args);
-                    case "close_app":
-                        return await CloseApp(args);
+                    case "get_application_map":
+                        return await GetApplicationMap(args);
                     default:
                         throw new ArgumentException($"Unknown tool: {name}");
                 }
@@ -380,6 +393,67 @@ namespace UiAutomationGRPC.MCP
                      }
                  }
              };
+        }
+
+        private async Task<JToken> GetApplicationMap(JObject args)
+        {
+            string runtimeId = args["runtime_id"]?.ToString() ?? "";
+            int depth = 2; // Default depth
+            if (int.TryParse(args["depth"]?.ToString(), out int d)) depth = d;
+
+            var tree = await GetUiTree(runtimeId, 0, depth);
+
+            return new JObject
+            {
+                ["content"] = new JArray
+                {
+                    new JObject
+                    {
+                        ["type"] = "text",
+                        ["text"] = tree.ToString()
+                    }
+                }
+            };
+        }
+
+        private async Task<JArray> GetUiTree(string runtimeId, int currentDepth, int maxDepth)
+        {
+            try 
+            {
+                var req = new GetChildrenRequest { RuntimeId = runtimeId };
+                var resp = await _client.GetChildrenAsync(req);
+                var json = JObject.FromObject(resp);
+                var elements = json["Elements"] as JArray;
+
+                if (elements == null) return new JArray();
+
+                var result = new JArray();
+                foreach (var el in elements)
+                {
+                    var node = (JObject)el.DeepClone();
+                    // Optional: trim unnecessary fields to reduce tokens
+                    // node.Remove("image_data"); // if exists
+
+                    if (currentDepth < maxDepth)
+                    {
+                        var childId = node["RuntimeId"]?.ToString() ?? "";
+                        if (!string.IsNullOrEmpty(childId))
+                        {
+                            var children = await GetUiTree(childId, currentDepth + 1, maxDepth);
+                            if (children.HasValues)
+                            {
+                                node["Children"] = children;
+                            }
+                        }
+                    }
+                    result.Add(node);
+                }
+                return result;
+            }
+            catch
+            {
+                return new JArray(); // Ignore errors in recursion
+            }
         }
     }
 }
