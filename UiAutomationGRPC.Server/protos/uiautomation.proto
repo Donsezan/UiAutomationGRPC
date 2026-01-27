@@ -27,6 +27,9 @@ service UiAutomationService {
   // Reflection API: query metadata about automation properties, patterns, control types and per-element supported patterns/properties
   rpc Reflect (ReflectionRequest) returns (ReflectionResponse);
 
+  // Gets immediate children of an element
+  rpc GetChildren (GetChildrenRequest) returns (ElementListResponse);
+
   // Sends keys to the active application
   rpc SendKeys (SendKeysRequest) returns (PerformActionResponse);
 }
@@ -41,12 +44,22 @@ message ElementResponse {
     string control_type = 5;
 }
 
+message ElementListResponse {
+    repeated ElementResponse elements = 1;
+    bool success = 2;
+    string message = 3;
+}
+
 // -- Finding --
 
 message FindElementRequest {
   string start_runtime_id = 1; // Empty for Desktop
   Condition condition = 2;
   TreeScope scope = 3;
+}
+
+message GetChildrenRequest {
+    string runtime_id = 1; // Optional, defaults to desktop if empty
 }
 
 enum TreeScope {
@@ -196,4 +209,3 @@ message ScreenshotResponse {
     bool success = 2;
     string message = 3;
 }
-

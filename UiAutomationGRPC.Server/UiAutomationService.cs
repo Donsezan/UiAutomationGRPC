@@ -58,6 +58,42 @@ namespace UiAutomationGRPC.Server
             }
         }
 
+        public override Task<ElementListResponse> GetChildren(GetChildrenRequest request, ServerCallContext context)
+        {
+            try
+            {
+                // 1. Resolve Root Element
+                AutomationElement root = AutomationElement.RootElement;
+                if (!string.IsNullOrEmpty(request.RuntimeId))
+                {
+                    if (!_elementCache.TryGetValue(request.RuntimeId, out root))
+                    {
+                         return Task.FromResult(new ElementListResponse { Success = false, Message = "Root element not found in cache." });
+                    }
+                }
+
+                // 2. Find All Children
+                var collection = root.FindAll(System.Windows.Automation.TreeScope.Children, System.Windows.Automation.Condition.TrueCondition);
+                
+                var response = new ElementListResponse 
+                { 
+                    Success = true, 
+                    Message = $"Found {collection.Count} children." 
+                };
+
+                foreach (AutomationElement element in collection)
+                {
+                    response.Elements.Add(MapToResponse(element));
+                }
+
+                return Task.FromResult(response);
+            }
+            catch (Exception ex)
+            {
+                return Task.FromResult(new ElementListResponse { Success = false, Message = $"Error getting children: {ex.Message}" });
+            }
+        }
+
         public override Task<PerformActionResponse> PerformAction(PerformActionRequest request, ServerCallContext context)
         {
             // If RuntimeId is empty, we handle global/mouse actions that don't require an element.
