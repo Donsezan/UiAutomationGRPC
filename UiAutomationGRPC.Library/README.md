@@ -88,6 +88,9 @@ File.WriteAllBytes("window.png", windowScreenshot.ImageData);
 // Close by name
 driver.CloseApp("CalculatorApp");
 
+// Force close (Kill process)
+driver.CloseApp("CalculatorApp", force: true);
+
 // Close by Process ID
 driver.CloseAppByProcessId(processId);
 ```

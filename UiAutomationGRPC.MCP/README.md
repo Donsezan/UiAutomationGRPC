@@ -57,10 +57,13 @@ Alternatively, you can point to the compiled executable:
 ## Available Tools
 
 -   **`open_app`**: Launches an application (e.g., `calc.exe`).
--   **`find_element`**: Finds UI elements.
--   **`perform_action`**: Clicks, toggles, invokes elements.
--   **`get_property`**: Reads values (e.g., Calculator result).
--   **`take_screenshot`**: Captures window or element screenshots.
+-   **`find_element`**: Finds UI elements based on properties (Name, AutomationId, etc.).
+-   **`perform_action`**: Performs actions like CLICK, INVOKE, SET_VALUE on elements.
+-   **`get_property`**: Reads specific properties from elements (e.g. text value).
+-   **`take_screenshot`**: Captures screenshots of specific elements or the entire window.
+-   **`close_app`**: Closes an application by name. Supports `force` argument to kill the process.
+-   **`get_application_map`**: Retrieves a simplified hierarchical map of the application UI.
+-   **`get_children`**: Gets immediate children of a UI element.
 
 ## Example Scenario: Calculator
 

@@ -2,6 +2,14 @@
 
 This service provides a gRPC interface for Windows UI Automation. It runs as a Windows Service using the .NET Generic Host.
 
+## Architecture & UI Framework
+
+**Interaction Framework**: This project uses the **Microsoft UI Automation (UIA)** framework, specifically via the managed .NET API **`System.Windows.Automation`** (based on the UI Automation Client API). 
+
+-   **System.Windows.Automation**: Used to discover UI elements (buttons, windows, lists) and perform patterns/actions (Invoke, Toggle, Value).
+-   **gRPC**: Used as the communication layer to expose these UIA capabilities to remote clients (specifically designed to be consumed by the **UiAutomationGRPC.MCP** server for LLM agents).
+-   **Windows Service**: Runs as a background service to maintain persistence and system-level access.
+
 ## Prerequisites
 
 - .NET Framework 4.7.2 Runtime
