@@ -300,14 +300,27 @@ namespace UiAutomationGRPC.Server
             {
                 var success = false;
                 var exceptions= new List<string>();
-                var processes = Process.GetProcessesByName(request.AppName);
+                // Strip extension if present to improve matching (e.g. calc.exe -> calc)
+                var appName = request.AppName;
+                if (appName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                {
+                     appName = Path.GetFileNameWithoutExtension(appName);
+                }
+
+                var processes = Process.GetProcessesByName(appName);
                 foreach (var p in processes)
                 {
                     try
                     {
-                        p.Kill();
-                        p.WaitForExit(); // possibly with a timeout
-                        Thread.Sleep(TimeSpan.FromSeconds(1));
+                        if (request.Force)
+                        {
+                            p.Kill();
+                        }
+                        else
+                        {
+                            p.CloseMainWindow();
+                        }
+                        p.WaitForExit(5000); // 5 sec timeout
                         success = true;
                     }
                     catch (Exception ex)
@@ -316,6 +329,12 @@ namespace UiAutomationGRPC.Server
                         exceptions.Add(ex.Message);
                     }
                 }
+                
+                if (processes.Length == 0)
+                {
+                    return Task.FromResult(new PerformActionResponse { Success = false, Message = $"No process found with name: {appName}" });
+                }
+
                 if (!success && processes.Length > 0)
                 {
                     return Task.FromResult(new PerformActionResponse { Success = false, Message = $"Failed to close one or more instances. Exceptions: {string.Join(", ", exceptions.ToArray())}" });

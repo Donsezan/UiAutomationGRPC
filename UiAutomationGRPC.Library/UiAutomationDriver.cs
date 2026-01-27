@@ -44,9 +44,9 @@ namespace UiAutomationGRPC.Library
         /// </summary>
         /// <param name="appName">The name of the application.</param>
         /// <returns>A tuple containing success status and message.</returns>
-        public (bool Success, string Message) CloseApp(string appName)
+        public (bool Success, string Message) CloseApp(string appName, bool force = false)
         {
-             var response = Client.CloseApp(new AppRequest { AppName = appName });
+             var response = Client.CloseApp(new AppRequest { AppName = appName, Force = force });
              return (response.Success, response.Message);
         }
 

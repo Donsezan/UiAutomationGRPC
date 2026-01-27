@@ -175,6 +175,7 @@ message ReflectionResponse {
 message AppRequest {
     string app_name = 1;
     string arguments = 2;
+    bool force = 3;
 }
 
 message CloseAppByProcessIdRequest {

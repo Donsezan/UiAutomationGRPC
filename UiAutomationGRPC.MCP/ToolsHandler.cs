@@ -133,11 +133,12 @@ namespace UiAutomationGRPC.MCP
                     ["inputSchema"] = new JObject
                     {
                         ["type"] = "object",
+                        ["required"] = new JArray { "app_name" },
                         ["properties"] = new JObject
                         {
-                            ["app_name"] = new JObject { ["type"] = "string" }
-                        },
-                        ["required"] = new JArray { "app_name" }
+                            ["app_name"] = new JObject { ["type"] = "string" },
+                            ["force"] = new JObject { ["type"] = "boolean", ["description"] = "If true, kills the process. If false, closes main window." }
+                        }
                     }
                 }
             };
@@ -379,7 +380,8 @@ namespace UiAutomationGRPC.MCP
         {
              var req = new AppRequest
              {
-                 AppName = args["app_name"]?.ToString() ?? ""
+                 AppName = args["app_name"]?.ToString() ?? "",
+                 Force = args["force"]?.ToObject<bool>() ?? false
              };
              var resp = await _client.CloseAppAsync(req);
              return new JObject

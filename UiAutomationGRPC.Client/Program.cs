@@ -263,7 +263,7 @@ namespace UiAutomationGRPC.Client
             {
                 // Note: The name here usually refers to the window title or process name alias depending on server logic.
                 // In many cases, closing by Process ID is more reliable.
-                var closeResult = driver.CloseApp("CalculatorApp");
+                var closeResult = driver.CloseApp("CalculatorApp", force: true);
                 if (!closeResult.Success) 
                     Console.WriteLine($"CloseApp (by name) Error: {closeResult.Message}");
                 else 
