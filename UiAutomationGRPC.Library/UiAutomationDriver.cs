@@ -104,6 +104,87 @@ namespace UiAutomationGRPC.Library
         }
 
         /// <summary>
+        /// Finds an element based on a condition.
+        /// </summary>
+        /// <param name="startRuntimeId">The runtime ID to start searching from (empty for Desktop).</param>
+        /// <param name="condition">The condition to match.</param>
+        /// <param name="scope">The scope of the search.</param>
+        /// <returns>A tuple containing success status, message, and the found element.</returns>
+        public async Task<(bool Success, string Message, ElementResponse Element)> FindElement(string startRuntimeId, Condition condition, TreeScope scope)
+        {
+            try
+            {
+                var request = new FindElementRequest { StartRuntimeId = startRuntimeId ?? "", Condition = condition, Scope = scope };
+                var response = await Client.FindElementAsync(request);
+                return (true, "Found", response);
+            }
+            catch (RpcException ex)
+            {
+                return (false, ex.Status.Detail ?? ex.Message, null);
+            }
+            catch (Exception ex)
+            {
+                return (false, ex.Message, null);
+            }
+        }
+
+        /// <summary>
+        /// Performs an action on an element.
+        /// </summary>
+        /// <param name="runtimeId">The runtime ID of the element.</param>
+        /// <param name="action">The action to perform.</param>
+        /// <param name="arguments">Optional arguments for the action.</param>
+        /// <returns>A tuple containing success status and message.</returns>
+        public async Task<(bool Success, string Message)> PerformAction(string runtimeId, ActionType action, System.Collections.Generic.IEnumerable<string> arguments = null)
+        {
+            var request = new PerformActionRequest { RuntimeId = runtimeId, Action = action };
+            if (arguments != null) request.Arguments.AddRange(arguments);
+            var response = await Client.PerformActionAsync(request);
+            return (response.Success, response.Message);
+        }
+
+        /// <summary>
+        /// Gets a property of an element.
+        /// </summary>
+        /// <param name="runtimeId">The runtime ID of the element.</param>
+        /// <param name="propertyName">The name of the property to retrieve.</param>
+        /// <returns>A tuple containing success status, message, and the property value.</returns>
+        public async Task<(bool Success, string Message, string Value)> GetProperty(string runtimeId, string propertyName)
+        {
+            var request = new GetPropertyRequest { RuntimeId = runtimeId, PropertyName = propertyName };
+            var response = await Client.GetPropertyAsync(request);
+            return (response.Success, response.Message, response.Value);
+        }
+
+        /// <summary>
+        /// Sends keys to the active application.
+        /// </summary>
+        /// <param name="keys">The keys to send.</param>
+        /// <param name="wait">Whether to wait for the keys to be processed.</param>
+        /// <returns>A tuple containing success status and message.</returns>
+        public async Task<(bool Success, string Message)> SendKeys(string keys, bool wait = true)
+        {
+            var request = new SendKeysRequest { Keys = keys, Wait = wait };
+            var response = await Client.SendKeysAsync(request);
+            return (response.Success, response.Message);
+        }
+
+        /// <summary>
+        /// Reflects on automation properties, patterns, or control types.
+        /// </summary>
+        /// <param name="target">The reflection target.</param>
+        /// <param name="runtimeId">Optional runtime ID for element-specific reflection.</param>
+        /// <returns>A tuple containing success status, message, and list of reflection entries.</returns>
+        public async Task<(bool Success, string Message, System.Collections.Generic.List<ReflectionEntry> Entries)> Reflect(ReflectionTarget target, string runtimeId = "")
+        {
+            var request = new ReflectionRequest { Target = target, RuntimeId = runtimeId ?? "" };
+            var response = await Client.ReflectAsync(request);
+            var list = new System.Collections.Generic.List<ReflectionEntry>();
+            if (response.Entries != null) list.AddRange(response.Entries);
+            return (response.Success, response.Message, list);
+        }
+
+        /// <summary>
         /// Disposes the driver and shuts down the channel.
         /// </summary>
         public void Dispose()
