@@ -96,15 +96,20 @@ namespace UiAutomationGRPC.LayerServer.Services
                          }
                          else
                          {
-                             var rect = element.Current.BoundingRectangle;
-                             if(rect.Width > 0) {
-                                 int x = (int)(rect.X + rect.Width / 2);
-                                 int y = (int)(rect.Y + rect.Height / 2);
-                                 NativeMethods.SetCursorPos(x, y);
-                                 NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
-                                 NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
-                             }
+                             ClickElement(element);
                          }
+                         break;
+                    case ActionType.LeftClick:
+                         ClickElement(element);
+                         break;
+                    case ActionType.RightClick:
+                         ClickElement(element, rightClick: true);
+                         break;
+                    case ActionType.DoubleClick:
+                         DoubleClickElement(element);
+                         break;
+                    case ActionType.MoveTo:
+                         MoveToElement(element);
                          break;
                      default:
                          break;
@@ -115,6 +120,70 @@ namespace UiAutomationGRPC.LayerServer.Services
             {
                 return Task.FromResult(new PerformActionResponse { Success = false, Message = $"Error: {ex.Message}" });
             }
+        }
+
+        private void MoveToElement(AutomationElement element)
+        {
+             if (TryGetClickablePoint(element, out Point pt))
+             {
+                 NativeMethods.SetCursorPos(pt.X, pt.Y);
+             }
+        }
+
+        private void ClickElement(AutomationElement element, bool rightClick = false)
+        {
+             try { element.SetFocus(); } catch {}
+             
+             if (TryGetClickablePoint(element, out Point pt))
+             {
+                 NativeMethods.SetCursorPos(pt.X, pt.Y);
+                 Thread.Sleep(100); // Give time for cursor to settle and UI to react
+                 if (rightClick)
+                 {
+                     NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0);
+                     NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
+                 }
+                 else
+                 {
+                     NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+                     NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+                 }
+             }
+        }
+
+        private void DoubleClickElement(AutomationElement element)
+        {
+             if (TryGetClickablePoint(element, out Point pt))
+             {
+                 NativeMethods.SetCursorPos(pt.X, pt.Y);
+                 NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+                 NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+                 Thread.Sleep(50);
+                 NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
+                 NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
+             }
+        }
+
+        private bool TryGetClickablePoint(AutomationElement element, out Point pt)
+        {
+            if (element.TryGetClickablePoint(out System.Windows.Point winPt)) 
+            {
+                pt = new Point((int)winPt.X, (int)winPt.Y);
+                return true;
+            }
+            
+            // Fallback to center of bounding box
+            try {
+                var rect = element.Current.BoundingRectangle;
+                if (rect.Width > 0 && rect.Height > 0)
+                {
+                    pt = new Point((int)(rect.X + rect.Width / 2), (int)(rect.Y + rect.Height / 2));
+                    return true;
+                }
+            } catch {}
+
+            pt = new Point(0, 0);
+            return false;
         }
 
         // -- New Methods for LayerServer --
@@ -470,6 +539,8 @@ namespace UiAutomationGRPC.LayerServer.Services
 
             public const int MOUSEEVENTF_LEFTDOWN = 0x02;
             public const int MOUSEEVENTF_LEFTUP = 0x04;
+            public const int MOUSEEVENTF_RIGHTDOWN = 0x08;
+            public const int MOUSEEVENTF_RIGHTUP = 0x10;
         }
 
     }
