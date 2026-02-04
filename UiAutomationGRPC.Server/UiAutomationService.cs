@@ -14,6 +14,9 @@ using PropertyCondition = System.Windows.Automation.PropertyCondition;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using Newtonsoft.Json;
+using UiAutomationGRPC.Server.Models;
+using UiAutomationGRPC.Server.Helpers;
 
 namespace UiAutomationGRPC.Server
 {
@@ -158,9 +161,18 @@ namespace UiAutomationGRPC.Server
                         {
                             int x = (int)(rect.X + rect.Width / 2);
                             int y = (int)(rect.Y + rect.Height / 2);
-                            NativeMethods.SetCursorPos(x, y);
+                            VirtualMouse.MoveTo(x, y);
                         }
                         break;
+                    case ActionType.LeftClick:
+                         ClickElementAtCenter(element);
+                         break;
+                    case ActionType.RightClick:
+                         ClickElementAtCenter(element, rightClick: true);
+                         break;
+                    case ActionType.DoubleClick:
+                         DoubleClickElementAtCenter(element);
+                         break;
                     default:
                         // Try global action fallback if it makes sense, or throw
                         throw new NotSupportedException($"Action {request.Action} is not supported on an element.");
@@ -174,74 +186,57 @@ namespace UiAutomationGRPC.Server
             }
         }
 
+        /// <summary>
+        /// Handles global mouse actions that don't require an element context.
+        /// All mouse operations are delegated to VirtualMouse helper.
+        /// </summary>
         private Task<PerformActionResponse> HandleGlobalAction(PerformActionRequest request)
         {
             try
             {
-                 switch (request.Action)
-                 {
-                     case ActionType.Move:
-                         if (request.Arguments.Count < 2) throw new ArgumentException("Move requires x and y arguments.");
-                         int x = int.Parse(request.Arguments[0]);
-                         int y = int.Parse(request.Arguments[1]);
-                         NativeMethods.SetCursorPos(x, y);
-                         break;
-                     case ActionType.LeftClick:
-                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
-                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
-                         break;
-                     case ActionType.RightClick:
-                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0);
-                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
-                         break;
-                     case ActionType.MouseMiddleClick:
-                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, 0);
-                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0);
-                         break;
-                     case ActionType.LeftDown:
-                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0);
-                         break;
-                     case ActionType.LeftUp:
-                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0);
-                         break;
-                     case ActionType.RightDown:
-                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0);
-                         break;
-                     case ActionType.RightUp:
-                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0);
-                         break;
-                     case ActionType.MousWeelScroll:
-                         if (request.Arguments.Count < 1) throw new ArgumentException("Scroll requires 'steps' argument.");
-                         int steps = int.Parse(request.Arguments[0]);
-                         // WHEEL_DELTA is 120. steps * 120
-                         NativeMethods.mouse_event(NativeMethods.MOUSEEVENTF_WHEEL, 0, 0, steps * 120, 0);
-                         break;
-                     default:
-                         throw new NotSupportedException($"Global Action {request.Action} is not supported.");
-                 }
-                 return Task.FromResult(new PerformActionResponse { Success = true, Message = "Global action performed." });
+                switch (request.Action)
+                {
+                    case ActionType.Move:
+                        if (request.Arguments.Count < 2) throw new ArgumentException("Move requires x and y arguments.");
+                        int x = int.Parse(request.Arguments[0]);
+                        int y = int.Parse(request.Arguments[1]);
+                        VirtualMouse.MoveTo(x, y);
+                        break;
+                    case ActionType.LeftClick:
+                        VirtualMouse.LeftClick();
+                        break;
+                    case ActionType.RightClick:
+                        VirtualMouse.RightClick();
+                        break;
+                    case ActionType.MouseMiddleClick:
+                        VirtualMouse.MiddleClick();
+                        break;
+                    case ActionType.LeftDown:
+                        VirtualMouse.LeftDown();
+                        break;
+                    case ActionType.LeftUp:
+                        VirtualMouse.LeftUp();
+                        break;
+                    case ActionType.RightDown:
+                        VirtualMouse.RightDown();
+                        break;
+                    case ActionType.RightUp:
+                        VirtualMouse.RightUp();
+                        break;
+                    case ActionType.MousWeelScroll:
+                        if (request.Arguments.Count < 1) throw new ArgumentException("Scroll requires 'steps' argument.");
+                        int steps = int.Parse(request.Arguments[0]);
+                        VirtualMouse.ScrollSteps(steps);
+                        break;
+                    default:
+                        throw new NotSupportedException($"Global Action {request.Action} is not supported.");
+                }
+                return Task.FromResult(new PerformActionResponse { Success = true, Message = "Global action performed." });
             }
             catch (Exception ex)
             {
                 return Task.FromResult(new PerformActionResponse { Success = false, Message = $"Error performing global action: {ex.Message}" });
             }
-        }
-
-        private static class NativeMethods
-        {
-            [System.Runtime.InteropServices.DllImport("user32.dll")]
-            public static extern bool SetCursorPos(int x, int y);
-
-            [System.Runtime.InteropServices.DllImport("user32.dll")]
-            public static extern void mouse_event(int dwFlags, int dx, int dy, int dwData, int dwExtraInfo);
-
-            public const int MOUSEEVENTF_LEFTDOWN = 0x02;
-            public const int MOUSEEVENTF_LEFTUP = 0x04;
-            public const int MOUSEEVENTF_RIGHTDOWN = 0x08;
-            public const int MOUSEEVENTF_RIGHTUP = 0x10;
-            public const int MOUSEEVENTF_MIDDLEDOWN = 0x20;
-            public const int MOUSEEVENTF_MIDDLEUP = 0x40;
-            public const int MOUSEEVENTF_WHEEL = 0x0800;
         }
 
         public override Task<GetPropertyResponse> GetProperty(GetPropertyRequest request, ServerCallContext context)
@@ -348,15 +343,7 @@ namespace UiAutomationGRPC.Server
         {
             try
             {
-                if (request.Wait)
-                {
-                    System.Windows.Forms.SendKeys.SendWait(request.Keys);
-                }
-                else
-                {
-                    System.Windows.Forms.SendKeys.Send(request.Keys);
-                }
-                
+                VirtualKeyboard.Send(request.Keys, request.Wait);
                 return Task.FromResult(new PerformActionResponse { Success = true, Message = "Keys sent" });
             }
             catch (Exception ex)
@@ -485,6 +472,259 @@ namespace UiAutomationGRPC.Server
                 current = parent;
             }
             return element;
+        }
+
+        // -- Layer Server Methods --
+
+        public override Task<AppStructureResponse> GetAppStructure(AppStructureRequest request, ServerCallContext context)
+        {
+            try
+            {
+                Process[] processes = null;
+
+                if (request.UseProcessId && request.ProcessId > 0)
+                {
+                    var p = Process.GetProcessById(request.ProcessId);
+                    if (p != null) processes = new[] { p };
+                }
+                else if (!string.IsNullOrEmpty(request.AppName))
+                {
+                    // Strip .exe if present
+                    string appName = request.AppName;
+                    if (appName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                        appName = Path.GetFileNameWithoutExtension(appName);
+
+                    processes = Process.GetProcessesByName(appName);
+                    
+                    if ((processes == null || processes.Length == 0) && !string.IsNullOrEmpty(request.Arguments))
+                    {
+                         var startInfo = new ProcessStartInfo
+                         {
+                             FileName = request.AppName,
+                             Arguments = request.Arguments,
+                             UseShellExecute = true
+                         };
+                         try 
+                         {
+                             var p = Process.Start(startInfo);
+                             Thread.Sleep(2000); 
+                             p.Refresh();
+                             processes = new[] { p };
+                             
+                             if (processes.Length > 0 && !processes[0].HasExited)
+                             {
+                                 var refreshed = Process.GetProcessesByName(appName);
+                                 if (refreshed.Length > 0) processes = refreshed;
+                             }
+                         }
+                         catch { /* Start failed */ }
+                    }
+                }
+
+                AutomationElement rootMapElement = null;
+
+                if (processes != null && processes.Length > 0)
+                {
+                    foreach (var p in processes)
+                    {
+                        try 
+                        {
+                            p.Refresh();
+                            if (p.HasExited) continue;
+
+                            // Strategy 1: MainWindowHandle
+                            if (p.MainWindowHandle != IntPtr.Zero)
+                            {
+                                try 
+                                {
+                                    var candidate = AutomationElement.FromHandle(p.MainWindowHandle);
+                                    if (candidate != null) 
+                                    {
+                                         if (!IsUwpSpacer(candidate))
+                                         {
+                                            rootMapElement = candidate;
+                                            break;
+                                         }
+                                    }
+                                }
+                                catch {}
+                            }
+
+                            // Strategy 2: Search by PID
+                            if (rootMapElement == null)
+                            {
+                                var condition = new PropertyCondition(AutomationElement.ProcessIdProperty, p.Id);
+                                try 
+                                {
+                                    var candidate = AutomationElement.RootElement.FindFirst(System.Windows.Automation.TreeScope.Children, condition);
+                                    if (candidate != null)
+                                    {
+                                        rootMapElement = candidate;
+                                        break;
+                                    }
+                                }
+                                catch {}
+                            }
+                        }
+                        catch { }
+                    }
+                }
+
+                // Strategy 3: Fallback to Window Name search
+                if (rootMapElement == null)
+                {
+                     string nameToSearch = request.AppName;
+                     if (!string.IsNullOrEmpty(nameToSearch) && nameToSearch.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                         nameToSearch = Path.GetFileNameWithoutExtension(nameToSearch);
+
+                     try 
+                     {
+                         var nameCondition = new PropertyCondition(AutomationElement.NameProperty, nameToSearch);
+                         var candidate = AutomationElement.RootElement.FindFirst(System.Windows.Automation.TreeScope.Children, nameCondition);
+                         if (candidate != null)
+                         {
+                             rootMapElement = candidate;
+                         }
+                     }
+                     catch { }
+                }
+                
+                if (rootMapElement == null)
+                    return Task.FromResult(new AppStructureResponse { Success = false, Message = "Main window element not found." });
+                
+                var rootNode = BuildAppNode(rootMapElement);
+                var json = JsonConvert.SerializeObject(rootNode, Formatting.Indented);
+
+                return Task.FromResult(new AppStructureResponse { Success = true, JsonStructure = json, Message = "Structure retrieved." });
+            }
+            catch (Exception ex)
+            {
+                return Task.FromResult(new AppStructureResponse { Success = false, Message = $"Error: {ex.Message}" });
+            }
+        }
+
+        public override async Task<AppStructureResponse> PerformActionWithStructure(PerformActionRequest request, ServerCallContext context)
+        {
+            var actionResult = await PerformAction(request, context);
+            if (!actionResult.Success)
+            {
+                return new AppStructureResponse { Success = false, Message = actionResult.Message };
+            }
+
+            if (_elementCache.TryGetValue(request.RuntimeId, out var element))
+            {
+                var window = GetTopLevelWindow(element);
+                if (window != null)
+                {
+                    await Task.Delay(200);
+                    var rootNode = BuildAppNode(window);
+                    var json = JsonConvert.SerializeObject(rootNode, Formatting.Indented);
+                    return new AppStructureResponse { Success = true, JsonStructure = json, Message = "Action performed and structure updated." };
+                }
+            }
+            
+            return new AppStructureResponse { Success = true, Message = "Action performed but could not rebuild structure (root not found)." };
+        }
+
+        private AppNode BuildAppNode(AutomationElement element)
+        {
+            try
+            {
+                string runtimeId = string.Join(",", element.GetRuntimeId());
+                _elementCache.TryAdd(runtimeId, element);
+
+                var node = new AppNode
+                {
+                    UniqId = runtimeId,
+                    UiAutomationId = element.Current.AutomationId,
+                    Name = element.Current.Name,
+                    ControlType = element.Current.ControlType.ProgrammaticName,
+                    IsClickable = (bool)element.GetCurrentPropertyValue(AutomationElement.IsInvokePatternAvailableProperty) || (bool)element.GetCurrentPropertyValue(AutomationElement.IsTogglePatternAvailableProperty),
+                    IsVisible = !element.Current.IsOffscreen
+                };
+
+                try {
+                    var rect = element.Current.BoundingRectangle;
+                    node.BoundingRectangle = $"{rect.Left},{rect.Top},{rect.Width},{rect.Height}";
+                } catch {}
+
+                var children = element.FindAll(System.Windows.Automation.TreeScope.Children, System.Windows.Automation.Condition.TrueCondition);
+                foreach (AutomationElement child in children)
+                {
+                     var childNode = BuildAppNode(child);
+                     if (childNode != null)
+                        node.Children.Add(childNode);
+                }
+
+                return node;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private bool IsUwpSpacer(AutomationElement element)
+        {
+            try {
+                var children = element.FindAll(System.Windows.Automation.TreeScope.Children, System.Windows.Automation.Condition.TrueCondition);
+                return children.Count == 0;
+            } catch { return true; }
+        }
+
+        /// <summary>
+        /// Clicks at the center of an element using VirtualMouse.
+        /// </summary>
+        private void ClickElementAtCenter(AutomationElement element, bool rightClick = false)
+        {
+            try { element.SetFocus(); } catch { }
+
+            if (TryGetClickablePoint(element, out Point pt))
+            {
+                VirtualMouse.MoveTo(pt.X, pt.Y);
+                Thread.Sleep(100);
+                if (rightClick)
+                {
+                    VirtualMouse.RightClick();
+                }
+                else
+                {
+                    VirtualMouse.LeftClick();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Double-clicks at the center of an element using VirtualMouse.
+        /// </summary>
+        private void DoubleClickElementAtCenter(AutomationElement element)
+        {
+            if (TryGetClickablePoint(element, out Point pt))
+            {
+                VirtualMouse.DoubleClickAt(pt.X, pt.Y);
+            }
+        }
+
+        private bool TryGetClickablePoint(AutomationElement element, out Point pt)
+        {
+            if (element.TryGetClickablePoint(out System.Windows.Point winPt)) 
+            {
+                pt = new Point((int)winPt.X, (int)winPt.Y);
+                return true;
+            }
+            
+            // Fallback to center of bounding box
+            try {
+                var rect = element.Current.BoundingRectangle;
+                if (rect.Width > 0 && rect.Height > 0)
+                {
+                    pt = new Point((int)(rect.X + rect.Width / 2), (int)(rect.Y + rect.Height / 2));
+                    return true;
+                }
+            } catch {}
+
+            pt = new Point(0, 0);
+            return false;
         }
 
         // Reflection API implementation
