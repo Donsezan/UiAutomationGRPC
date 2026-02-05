@@ -76,14 +76,7 @@ namespace UiAutomationGRPC.Server
                 }
 
                 // 2. Find All Children using TreeWalker for more reliable traversal
-                var walker = TreeWalker.ControlViewWalker;
-                var children = new List<AutomationElement>();
-                var child = walker.GetFirstChild(root);
-                while (child != null)
-                {
-                    children.Add(child);
-                    child = walker.GetNextSibling(child);
-                }
+                var children = GetChildElements(root);
                 
                 var response = new ElementListResponse 
                 { 
@@ -656,14 +649,11 @@ namespace UiAutomationGRPC.Server
                 } catch {}
 
                 // Use TreeWalker for more reliable child traversal
-                var walker = TreeWalker.ControlViewWalker;
-                var child = walker.GetFirstChild(element);
-                while (child != null)
+                foreach (var child in GetChildElements(element))
                 {
                     var childNode = BuildAppNode(child);
                     if (childNode != null)
                         node.Children.Add(childNode);
-                    child = walker.GetNextSibling(child);
                 }
 
                 return node;
@@ -677,11 +667,33 @@ namespace UiAutomationGRPC.Server
         private bool IsUwpSpacer(AutomationElement element)
         {
             try {
-                // Use TreeWalker for more reliable child check
-                var walker = TreeWalker.ControlViewWalker;
-                var firstChild = walker.GetFirstChild(element);
-                return firstChild == null;
+                return !HasChildren(element);
             } catch { return true; }
+        }
+
+        /// <summary>
+        /// Gets child elements using TreeWalker for more reliable traversal than FindAll.
+        /// </summary>
+        private List<AutomationElement> GetChildElements(AutomationElement parent)
+        {
+            var children = new List<AutomationElement>();
+            var walker = TreeWalker.ControlViewWalker;
+            var child = walker.GetFirstChild(parent);
+            while (child != null)
+            {
+                children.Add(child);
+                child = walker.GetNextSibling(child);
+            }
+            return children;
+        }
+
+        /// <summary>
+        /// Checks if an element has any children using TreeWalker.
+        /// </summary>
+        private bool HasChildren(AutomationElement element)
+        {
+            var walker = TreeWalker.ControlViewWalker;
+            return walker.GetFirstChild(element) != null;
         }
 
         /// <summary>
