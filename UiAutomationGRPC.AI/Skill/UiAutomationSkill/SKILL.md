@@ -1,97 +1,127 @@
 ---
 name: Windows UI Automation Control
-description: Control Windows applications using the UiAutomationGRPC LayerServer and gRPC calls. This skill enables a "See -> Think -> Act" loop for interacting with desktop UIs.
+description: Control Windows applications using UiAutomationGRPC.Server with the "See → Think → Act" loop for efficient LLM-driven UI automation.
 ---
 
 # Windows UI Automation Control
 
-This skill allows you to control Windows applications by interacting with the `UiAutomationGRPC.LayerServer`. It abstracts the complexity of UI automation into a simple JSON-based structure and a set of actions.
+This skill enables you to control Windows desktop applications through a gRPC-based automation server. It uses **Approach 2: App Structure (LLM-Friendly)** for efficient "See → Think → Act" loops.
 
-## 1. Prerequisites
+## Prerequisites
 
-- **LayerServer Running**: Ensure `UiAutomationGRPC.LayerServer.exe` is running on `localhost:50052`.
-- **grpccurl**: This tool is used to send gRPC requests.
+- **UiAutomationGRPC.Server** running on `localhost:50051`
+- **grpccurl** installed (for direct gRPC calls)
 
-## 2. The Loop: See -> Think -> Act
+## The Loop: See → Think → Act
 
-The core interaction model is a loop:
-1.  **See**: Get the current state of the application (JSON tree).
-2.  **Think**: Analyze the JSON to find the element you want to interact with (find its `UniqId`).
-3.  **Act**: Send an action (Click, Type, etc.) to that element using its `UniqId`.
-4.  **Repeat**: The action response includes the new state, so you can immediately plan the next move.
-
-## 3. Commands
-
-### Step 1: Get App Structure (See)
-
-Retrieve the full UI tree of an application.
-
-```bash
-grpccurl -plaintext -d '{"app_name": "calc"}' localhost:50052 UiAutomation.UiAutomationService/GetAppStructure
+```
+┌─────────────────────────────────────────────────────────┐
+│  1. SEE    → GetAppStructure (get full UI as JSON)      │
+│  2. THINK  → Analyze JSON, find target element UniqId   │
+│  3. ACT    → PerformActionWithStructure (action + new UI)│
+│  4. REPEAT → Response includes updated UI, continue     │
+└─────────────────────────────────────────────────────────┘
 ```
 
-- **app_name**: The name of the process (e.g., "calc", "notepad").
-- **Output**: Returns `json_structure` containing the tree of `AppNode`s.
+## Commands
 
-### Understanding the AppNode
+### Get App Structure (SEE)
 
-The JSON structure consists of nested nodes. Key fields:
+Retrieve the complete UI tree of an application.
+
+```bash
+grpccurl -plaintext -d '{"app_name": "calc"}' localhost:50051 UiAutomation.UiAutomationService/GetAppStructure
+```
+
+**Parameters:**
+| Parameter | Description |
+|-----------|-------------|
+| `app_name` | Process name (e.g., "calc", "notepad") |
+| `process_id` | Alternative: use PID instead |
+| `use_process_id` | Set `true` to use PID lookup |
+
+**Returns:** `json_structure` containing the UI tree.
+
+### Understanding AppNode
 
 ```json
 {
-  "UniqId": "42,12345...",        // <--- CRITICAL: Use this ID for actions
-  "Name": "Five",                 // Visual text or name
-  "AutomationId": "num5Button",   // Stable ID (useful for confirmation)
-  "ControlType": "Button",        // Type of element
-  "BoundingRectangle": "...",     // coordinates
+  "UniqId": "42,12345",           // ← Use this for actions
+  "Name": "Five",                 // Display name
+  "UiAutomationId": "num5Button", // Stable identifier
+  "ControlType": "ControlType.Button",
+  "BoundingRectangle": "x,y,w,h",
+  "IsClickable": true,
+  "IsVisible": true,
   "Children": [ ... ]
 }
 ```
 
-### Step 2: Perform Action (Act)
+### Perform Action with Structure (ACT)
 
-Perform an action on an element and get the updated structure back immediately.
+**This is the key method for the loop** - performs an action AND returns the updated UI structure.
 
 ```bash
-grpccurl -plaintext -d '{"runtime_id": "YOUR_UNIQ_ID_HERE", "action": 9}' localhost:50052 UiAutomation.UiAutomationService/PerformActionWithStructure
+grpccurl -plaintext -d '{"runtime_id": "YOUR_UNIQ_ID", "action": 9}' localhost:50051 UiAutomation.UiAutomationService/PerformActionWithStructure
 ```
 
-- **runtime_id**: The `UniqId` found in the JSON node.
-- **action**: The integer code for the action (see reference below).
-- **arguments**: Optional list of strings.
+**Parameters:**
+| Parameter | Description |
+|-----------|-------------|
+| `runtime_id` | The `UniqId` from the JSON |
+| `action` | Action code (see table below) |
+| `arguments` | Optional string array |
 
 ### Action Reference
 
-| Action Name | Code | Description | Arguments |
-| :--- | :--- | :--- | :--- |
-| **INVOKE** | 0 | Trigger default action (e.g., press button) | None |
-| **SET_VALUE** | 4 | Type text into a field | `["Text to type"]` |
-| **SET_FOCUS** | 5 | Focus the element | None |
-| **MoveTo** | 8 | Move mouse cursor to element center | None |
-| **LeftClick** | 9 | Simulate Left Click (Recommended) | None |
-| **RightClick** | 10 | Simulate Right Click | None |
-| **DoubleClick** | 17 | Simulate Double Click | None |
+| Action | Code | Use Case | Arguments |
+|--------|------|----------|-----------|
+| **INVOKE** | 0 | Default action (buttons) | - |
+| **TOGGLE** | 1 | Checkboxes, switches | - |
+| **SET_VALUE** | 4 | Type text | `["text"]` |
+| **SET_FOCUS** | 5 | Focus element | - |
+| **MoveTo** | 8 | Move mouse to element | - |
+| **LeftClick** | 9 | Click (recommended) | - |
+| **RightClick** | 10 | Right-click | - |
+| **DoubleClick** | 17 | Double-click | - |
 
-### Examples
+## Example: Calculator 9 × 9
 
-#### Click the "5" button
-1. Find node with `Name: "Five"` or `AutomationId: "num5Button"`.
-2. Extract `UniqId` (e.g., "42,333").
-3. Call:
 ```bash
-grpccurl -plaintext -d '{"runtime_id": "42,333", "action": 9}' localhost:50052 UiAutomation.UiAutomationService/PerformActionWithStructure
+# 1. Open calculator (if not running)
+grpccurl -plaintext -d '{"app_name": "calc"}' localhost:50051 UiAutomation.UiAutomationService/OpenApp
+
+# 2. Get structure → Find "Nine" button UniqId
+grpccurl -plaintext -d '{"app_name": "calc"}' localhost:50051 UiAutomation.UiAutomationService/GetAppStructure
+
+# 3. Click "9" → Returns updated structure
+grpccurl -plaintext -d '{"runtime_id": "42,xxx", "action": 9}' localhost:50051 UiAutomation.UiAutomationService/PerformActionWithStructure
+
+# 4. Click "×" → Find multiply button, click it
+grpccurl -plaintext -d '{"runtime_id": "42,yyy", "action": 9}' localhost:50051 UiAutomation.UiAutomationService/PerformActionWithStructure
+
+# 5. Click "9" again
+grpccurl -plaintext -d '{"runtime_id": "42,xxx", "action": 9}' localhost:50051 UiAutomation.UiAutomationService/PerformActionWithStructure
+
+# 6. Click "=" → Get result from display element
+grpccurl -plaintext -d '{"runtime_id": "42,zzz", "action": 9}' localhost:50051 UiAutomation.UiAutomationService/PerformActionWithStructure
 ```
 
-#### Type "Hello" into Notepad
-1. Find node with `ControlType: "Document"` or `Name: "Text Editor"`.
-2. Extract `UniqId` (e.g., "42,999").
-3. Call:
-```bash
-grpccurl -plaintext -d '{"runtime_id": "42,999", "action": 4, "arguments": ["Hello"]}' localhost:50052 UiAutomation.UiAutomationService/PerformActionWithStructure
-```
+## Other Useful Methods
 
-## 4. Troubleshooting
+| Method | Description |
+|--------|-------------|
+| `OpenApp` | Launch application by path/name |
+| `CloseApp` | Close by process name |
+| `CloseAppByProcessId` | Close by PID |
+| `SendKeys` | Send keyboard input |
+| `TakeScreenshot` | Capture window/element |
 
-- **App Not Found**: Ensure the app is running. If not, you can try starting it via command line or ensure `GetAppStructure` is called with arguments if supported by your setup.
-- **Element Not Found**: `UniqId`s are runtime-specific. If the app restarts, IDs change. Always fetch a fresh structure.
-- **Access Denied**: Some apps require Admin privileges.
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| App not found | Ensure app is running; use OpenApp first |
+| Element not found | UniqIds are runtime-specific; re-fetch structure |
+| Access denied | Run server with Admin privileges |
+| Server unreachable | Verify `UiAutomationGRPC.Server` is running on 50051 |

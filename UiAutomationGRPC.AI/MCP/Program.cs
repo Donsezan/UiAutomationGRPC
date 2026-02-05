@@ -12,8 +12,8 @@ namespace UiAutomationGRPC.LLM
             // Allow http connections for gRPC
             // AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
 
-            // The LayerServer listens on 50052
-            var address = "http://localhost:50052";
+            // The unified Server listens on 50051
+            var address = "http://localhost:50051";
             
             try 
             {

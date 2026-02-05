@@ -1,10 +1,15 @@
 # UiAutomationGRPC.LLM (MCP Server)
 
-This is a C# MCP (Model Context Protocol) server that acts as a bridge between LLMs (like Claude/Antigravity) and the `UiAutomationGRPC.LayerServer`.
+A C# MCP (Model Context Protocol) server that bridges LLMs (like Claude/Antigravity) with `UiAutomationGRPC.Server` for UI automation.
 
-It connects to `UiAutomationGRPC.LayerServer` via gRPC (default: `http://localhost:50052`) and exposes UI automation capabilities as MCP Tools.
+Connects via gRPC (default: `http://localhost:50051`) and exposes UI automation capabilities as MCP Tools.
 
 ## Tools
+
+### `open_app`
+Launches an application.
+- **app_name**: Path to executable.
+- **arguments**: Command line arguments.
 
 ### `get_app_structure`
 Retrieves the full UI structure of an application as a JSON tree.
@@ -14,14 +19,15 @@ Retrieves the full UI structure of an application as a JSON tree.
 
 ### `perform_action`
 Performs an action on a UI element.
-- **runtime_id**: The unique ID of the element (retrieved from `get_app_structure`).
+- **runtime_id**: The unique ID of the element (from `get_app_structure`).
 - **action**: The action to perform (e.g., `INVOKE`, `CLICK`, `SET_VALUE`, `EXPAND_COLLAPSE`).
 - **arguments**: Optional list of arguments (e.g., text for `SET_VALUE`).
 
-### `open_app`
-Launches an application.
-- **app_name**: Path to executable.
-- **arguments**: Command line arguments.
+### `perform_action_with_structure`
+Performs an action on a UI element and returns the updated app structure. Ideal for LLM "See → Think → Act" loops.
+- **runtime_id**: The unique ID of the element.
+- **action**: The action to perform.
+- **arguments**: Optional list of arguments.
 
 ### `close_app`
 Closes an application by Process ID.
@@ -29,10 +35,10 @@ Closes an application by Process ID.
 
 ## Prerequisites
 
-1. **UiAutomationGRPC.LayerServer** must be running on port `50052`.
+1. **UiAutomationGRPC.Server** must be running on port `50051`.
 2. .NET 8 SDK installed.
 
-## building
+## Building
 
 ```powershell
 dotnet build
@@ -49,4 +55,4 @@ Or configure your MCP client (like Claude Desktop) to run:
 
 ## Configuration
 
-The server currently hardcodes the gRPC address to `http://localhost:50052`. Modify `Program.cs` to change this if needed.
+The server currently hardcodes the gRPC address to `http://localhost:50051`. Modify `Program.cs` to change this if needed.

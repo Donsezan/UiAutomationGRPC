@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Protobuf Include="..\UiAutomationGRPC.LayerServer\Protos\uiautomation_layer.proto" GrpcServices="Client" />
+    <Protobuf Include="..\..\UiAutomationGRPC.Server\protos\uiautomation.proto" GrpcServices="Client" />
   </ItemGroup>
 
 </Project>
