@@ -75,16 +75,23 @@ namespace UiAutomationGRPC.Server
                     }
                 }
 
-                // 2. Find All Children
-                var collection = root.FindAll(System.Windows.Automation.TreeScope.Children, System.Windows.Automation.Condition.TrueCondition);
+                // 2. Find All Children using TreeWalker for more reliable traversal
+                var walker = TreeWalker.ControlViewWalker;
+                var children = new List<AutomationElement>();
+                var child = walker.GetFirstChild(root);
+                while (child != null)
+                {
+                    children.Add(child);
+                    child = walker.GetNextSibling(child);
+                }
                 
                 var response = new ElementListResponse 
                 { 
                     Success = true, 
-                    Message = $"Found {collection.Count} children." 
+                    Message = $"Found {children.Count} children." 
                 };
 
-                foreach (AutomationElement element in collection)
+                foreach (AutomationElement element in children)
                 {
                     response.Elements.Add(MapToResponse(element));
                 }
@@ -648,12 +655,15 @@ namespace UiAutomationGRPC.Server
                     node.BoundingRectangle = $"{rect.Left},{rect.Top},{rect.Width},{rect.Height}";
                 } catch {}
 
-                var children = element.FindAll(System.Windows.Automation.TreeScope.Children, System.Windows.Automation.Condition.TrueCondition);
-                foreach (AutomationElement child in children)
+                // Use TreeWalker for more reliable child traversal
+                var walker = TreeWalker.ControlViewWalker;
+                var child = walker.GetFirstChild(element);
+                while (child != null)
                 {
-                     var childNode = BuildAppNode(child);
-                     if (childNode != null)
+                    var childNode = BuildAppNode(child);
+                    if (childNode != null)
                         node.Children.Add(childNode);
+                    child = walker.GetNextSibling(child);
                 }
 
                 return node;
@@ -667,8 +677,10 @@ namespace UiAutomationGRPC.Server
         private bool IsUwpSpacer(AutomationElement element)
         {
             try {
-                var children = element.FindAll(System.Windows.Automation.TreeScope.Children, System.Windows.Automation.Condition.TrueCondition);
-                return children.Count == 0;
+                // Use TreeWalker for more reliable child check
+                var walker = TreeWalker.ControlViewWalker;
+                var firstChild = walker.GetFirstChild(element);
+                return firstChild == null;
             } catch { return true; }
         }
 
