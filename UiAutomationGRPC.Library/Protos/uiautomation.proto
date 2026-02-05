@@ -32,6 +32,14 @@ service UiAutomationService {
 
   // Sends keys to the active application
   rpc SendKeys (SendKeysRequest) returns (PerformActionResponse);
+
+  // -- Layer Server Methods --
+
+  // Returns the application structure as a JSON string
+  rpc GetAppStructure (AppStructureRequest) returns (AppStructureResponse);
+  
+  // Performs an action and returns the updated application structure
+  rpc PerformActionWithStructure (PerformActionRequest) returns (AppStructureResponse);
 }
 
 // -- Common --
@@ -210,3 +218,17 @@ message ScreenshotResponse {
     string message = 3;
 }
 
+// -- Layer Server Messages --
+
+message AppStructureRequest {
+    string app_name = 1;
+    int32 process_id = 2;
+    bool use_process_id = 3; // if true, use process_id, else app_name
+    string arguments = 4; // For launching if not open (optional)
+}
+
+message AppStructureResponse {
+    string json_structure = 1;
+    bool success = 2;
+    string message = 3;
+}

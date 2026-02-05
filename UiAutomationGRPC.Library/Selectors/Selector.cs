@@ -54,7 +54,7 @@ namespace UiAutomationGRPC.Library.Selectors
             {
                 SearchType = _searchType,
                 Condition = previesSelector.Condition,
-                AdditionalSearchProperty = index
+                AdditionalSearchProperty = index.ToString()
             };
             List.Add(_selector);
             return new ChildActions(List, _selector, _searchType);
@@ -270,7 +270,7 @@ namespace UiAutomationGRPC.Library.Selectors
             {
                 SearchType = _searchType,
                 Condition = previesSelector.Condition,
-                AdditionalSearchProperty = index
+                AdditionalSearchProperty = index.ToString()
             };
             List.Add(_selector);
             return new ChildActions(List, _selector, _searchType);
