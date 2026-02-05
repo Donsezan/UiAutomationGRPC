@@ -1,13 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework>
-    <ImplicitUsings>disable</ImplicitUsings>
-    <Nullable>disable</Nullable>
+    <TargetFramework>net6.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
 
-  
     <PackageId>UiAutomationGRPC</PackageId>
-    <Version>1.0.0</Version>
+    <Version>2.0.0</Version>
     <Authors>Nikita A</Authors>
     <Description>A client library for remote Windows UI Automation using gRPC. Features a fluent selector API and driver for efficient UI testing and interaction.</Description>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
@@ -15,7 +14,6 @@
     <RepositoryUrl>https://github.com/Donsezan/UiAutomationGRPC</RepositoryUrl>
     <PackageTags>grpc; ui automation; windows; GUI automation</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <NoWarn>$(NoWarn);NU5100</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,31 +22,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="WindowsBase" />
-    <Reference Include="System.Windows.Forms" />
-    <Reference Include="System.Drawing" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="Google.Protobuf" Version="3.26.1" />
-    <PackageReference Include="Grpc.Core" Version="2.46.6">
-      <ExcludeAssets>content;contentfiles</ExcludeAssets>
-    </PackageReference>
+    <PackageReference Include="Google.Protobuf" Version="3.27.2" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.62.0" />
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="8.0.0" />
     <PackageReference Include="Grpc.Tools" Version="2.62.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Update="**\grpc_csharp_ext.x64.dll" Pack="false" />
-    <Content Update="**\grpc_csharp_ext.x86.dll" Pack="false" />
-    <None Update="**\grpc_csharp_ext.x64.dll" Pack="false" />
-    <None Update="**\grpc_csharp_ext.x86.dll" Pack="false" />
   </ItemGroup>
 
 </Project>

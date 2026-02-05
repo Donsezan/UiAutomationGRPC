@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace UiAutomationGRPC.LayerServer.Models
+namespace UiAutomationGRPC.Server.Models
 {
     public class AppNode
     {

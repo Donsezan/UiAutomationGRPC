@@ -5,10 +5,11 @@ A client library for remote Windows UI Automation using gRPC. This library allow
 ## Features
 
 - **Remote Automation**: Control applications on a remote machine running the UiAutomationGRPC Server.
-- **Fluent API**: intuitive selector syntax for finding UI elements.
+- **Fluent API**: Intuitive selector syntax for finding UI elements.
 - **App Management**: Open and close applications by name or process ID.
-- **Interactions**: Click, type text, and simulate keyboard inputs.
-- **Screenshots**: Capture screenshots of specific elements or the entire window/screen.
+- **Element Interactions**: Click, type text, invoke, toggle, and more.
+- **Screenshots**: Capture screenshots of specific elements or the entire window.
+- **Keyboard & Mouse**: Full virtual keyboard and mouse support via helper classes.
 
 ## Installation
 
@@ -20,74 +21,109 @@ dotnet add package UiAutomationGRPC
 
 ## Prerequisites
 
+- **.NET 6.0+** runtime
 - **UiAutomationGRPC Server**: The target machine must be running the [UiAutomationGRPC Server](https://github.com/Donsezan/UiAutomationGRPC).
 
-## Usage
+## Quick Start
 
 ### 1. Initialize the Driver
-
-Connect to the running gRPC server.
 
 ```csharp
 using UiAutomationGRPC.Library;
 
-// Connect to localhost or remote IP
-using var driver = new UiAutomationDriver("127.0.0.1:50051");
+// Connect to the gRPC server
+await using var driver = new UiAutomationDriver("http://127.0.0.1:50051");
 ```
 
 ### 2. Open an Application
 
 ```csharp
-var openResult = await driver.OpenApp("calc");
-if (openResult.Success)
+var (success, message, processId) = await driver.OpenAppAsync("calc");
+Console.WriteLine($"Calculator opened with PID: {processId}");
+```
+
+### 3. Find Elements and Perform Actions
+
+```csharp
+// Find an element
+var findRequest = new FindElementRequest
 {
-    Console.WriteLine($"Calculator opened with PID: {openResult.ProcessId}");
-}
+    Condition = new Condition
+    {
+        PropertyCondition = new PropertyCondition
+        {
+            PropertyName = "AutomationId",
+            PropertyValue = "num9Button"
+        }
+    },
+    Scope = TreeScope.Descendants
+};
+var element = await driver.FindElementAsync(findRequest);
+
+// Perform an action
+await driver.PerformActionAsync(element.RuntimeId, ActionType.Invoke);
 ```
 
-### 3. Find Elements and Interact
-
-Use the fluent selector API to define elements and perform actions.
+### 4. Use Virtual Keyboard & Mouse
 
 ```csharp
-// Define a selector for the "Two" button
-var buttonTwo = new Selector()
-    .ProcessId(processId)
-    .ControlType("Button")
-    .Name("Two");
+var keyboard = new VirtualKeyboard(driver);
+var mouse = new VirtualMouse(driver);
 
-// Click the button
-var clickResult = await driver.Click(buttonTwo);
+// Type text
+await keyboard.SendWaitAsync("2+2=");
 
-// Or using a higher level Page Object pattern (recommended)
-// ...
-```
-
-### 4. Keyboard Input
-
-```csharp
-// Send text or keys
-await driver.SendKeys("2+2=");
+// Click on an element
+await mouse.LeftClickAsync(element.RuntimeId);
 ```
 
 ### 5. Take Screenshots
 
 ```csharp
-// Screenshot a specific element by Runtime ID
-var elementScreenshot = await driver.TakeElementScreenshot(elementRuntimeId);
-File.WriteAllBytes("element.png", elementScreenshot.ImageData);
-
-// Screenshot the active window
-var windowScreenshot = await driver.TakeWindowScreenshot();
-File.WriteAllBytes("window.png", windowScreenshot.ImageData);
+var (_, _, imageData) = await driver.TakeWindowScreenshotAsync(processId: processId);
+File.WriteAllBytes("screenshot.png", imageData);
 ```
 
 ### 6. Close Application
 
 ```csharp
-// Close by name
-driver.CloseApp("CalculatorApp");
-
-// Close by Process ID
-driver.CloseAppByProcessId(processId);
+await driver.CloseAppByProcessIdAsync(processId);
 ```
+
+## API Reference
+
+### UiAutomationDriver
+
+| Method | Description |
+|--------|-------------|
+| `OpenAppAsync` | Launch an application |
+| `CloseAppAsync` / `CloseAppByProcessIdAsync` | Close an application |
+| `FindElementAsync` | Find an element by conditions |
+| `GetChildrenAsync` | Get child elements |
+| `PerformActionAsync` | Perform action (Invoke, Click, Toggle, etc.) |
+| `SendKeysAsync` | Send keyboard input |
+| `GetPropertyAsync` | Get element property value |
+| `TakeElementScreenshotAsync` / `TakeWindowScreenshotAsync` | Capture screenshots |
+| `ReflectAsync` | Query automation metadata |
+| `GetAppStructureAsync` | Get application structure as JSON |
+| `PerformActionWithStructureAsync` | Perform action and get updated structure |
+
+### VirtualMouse
+
+| Method | Description |
+|--------|-------------|
+| `MoveAsync` / `MoveToAsync` | Move cursor |
+| `LeftClickAsync` / `RightClickAsync` | Click operations |
+| `DoubleClickAsync` | Double click |
+| `ScrollAsync` | Mouse wheel scroll |
+
+### VirtualKeyboard
+
+| Method | Description |
+|--------|-------------|
+| `SendAsync` / `SendWaitAsync` | Send key input |
+| `SendKeyAsync` | Send single key with delay |
+
+## License
+
+Apache-2.0

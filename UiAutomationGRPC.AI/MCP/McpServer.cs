@@ -92,6 +92,7 @@ namespace UiAutomationGRPC.LLM
                             GetToolDefinition_OpenApp(),
                             GetToolDefinition_GetAppStructure(),
                             GetToolDefinition_PerformAction(),
+                            GetToolDefinition_PerformActionWithStructure(),
                             GetToolDefinition_CloseApp()
                         }
                     }
@@ -116,6 +117,9 @@ namespace UiAutomationGRPC.LLM
                             break;
                         case "perform_action":
                             resultData = await HandlePerformAction(args);
+                            break;
+                        case "perform_action_with_structure":
+                            resultData = await HandlePerformActionWithStructure(args);
                             break;
                         case "close_app":
                             resultData = await HandleCloseApp(args);
@@ -210,6 +214,26 @@ namespace UiAutomationGRPC.LLM
             });
         }
 
+        private JObject GetToolDefinition_PerformActionWithStructure()
+        {
+            return JObject.FromObject(new
+            {
+                name = "perform_action_with_structure",
+                description = "Performs an action on a UI element and returns the updated app structure. Ideal for LLM 'See-Think-Act' loops.",
+                inputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        runtime_id = new { type = "string", description = "The runtime ID of the element (from get_app_structure)." },
+                        action = new { type = "string", description = "The action to perform (e.g., INVOKE, CLICK, SET_VALUE)." },
+                        arguments = new { type = "array", items = new { type = "string" }, description = "Arguments for the action (e.g., text for SET_VALUE)." }
+                    },
+                    required = new[] { "runtime_id", "action" }
+                }
+            });
+        }
+
         private JObject GetToolDefinition_CloseApp()
         {
             return JObject.FromObject(new
@@ -279,6 +303,39 @@ namespace UiAutomationGRPC.LLM
         {
             if (args == null) throw new ArgumentNullException(nameof(args));
             
+            var req = BuildPerformActionRequest(args);
+            var resp = await _client.PerformActionAsync(req);
+
+            var content = new JArray();
+            content.Add(new JObject
+            {
+                ["type"] = "text",
+                ["text"] = JsonConvert.SerializeObject(new { resp.Success, resp.Message })
+            });
+
+            return new JObject { ["content"] = content, ["isError"] = !resp.Success };
+        }
+
+        private async Task<JObject> HandlePerformActionWithStructure(JObject? args)
+        {
+            if (args == null) throw new ArgumentNullException(nameof(args));
+            
+            var req = BuildPerformActionRequest(args);
+            var resp = await _client.PerformActionWithStructureAsync(req);
+
+            var content = new JArray();
+            var text = resp.Success ? resp.JsonStructure : resp.Message;
+            content.Add(new JObject
+            {
+                ["type"] = "text",
+                ["text"] = text
+            });
+
+            return new JObject { ["content"] = content, ["isError"] = !resp.Success };
+        }
+
+        private PerformActionRequest BuildPerformActionRequest(JObject args)
+        {
             var actionStr = args["action"]?.ToString();
             if (!Enum.TryParse<ActionType>(actionStr, true, out var actionType))
             {
@@ -304,16 +361,7 @@ namespace UiAutomationGRPC.LLM
                 }
             }
 
-            var resp = await _client.PerformActionAsync(req);
-
-            var content = new JArray();
-            content.Add(new JObject
-            {
-                ["type"] = "text",
-                ["text"] = JsonConvert.SerializeObject(new { resp.Success, resp.Message })
-            });
-
-            return new JObject { ["content"] = content, ["isError"] = !resp.Success };
+            return req;
         }
 
         private async Task<JObject> HandleCloseApp(JObject? args)

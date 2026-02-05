@@ -3,79 +3,151 @@
 **A generic, decoupled Windows UI Automation framework using gRPC.**
 
 ## The Problem
+
 Standard Windows UI Automation code is often tightly coupled to the machine running the automation. This creates challenges for:
--   **Remote Automation**: Driving UI on a separate machine (e.g., a dedicated test rig) from a developer's workstation or CI runner.
--   **Language Interop**: Writing test logic in languages other than C#/.NET (since standard UIA is .NET/COM based).
--   **Separation of Concerns**: Mixing low-level "how to click" logic with high-level "business workflow" logic.
+
+- **Remote Automation**: Driving UI on a separate machine (e.g., a dedicated test rig) from a developer's workstation or CI runner.
+- **Language Interop**: Writing test logic in languages other than C#/.NET (since standard UIA is .NET/COM based).
+- **LLM Integration**: AI agents need a structured way to "see" and interact with applications.
 
 ## The Solution
-**UiAutomationGRPC** solves this by splitting the automation into two distinct components:
 
-1.  **The Server (Active Driver)**: A Windows Service running on the target machine. It has full access to the Windows desktop and exposes the UI Automation capabilities via a generic gRPC API.
-2.  **The Client (Test Controller)**: A lightweight library (SDK) that sends commands to the Server. It can run anywhere network-reachable to the server.
+**UiAutomationGRPC** solves this by splitting the automation into distinct components:
 
-This architecture allows you to write tests that say "Find the button called 'Submit'" without worrying about *how* that command is executed on the specific Windows instance.
+1. **Server**: A Windows Service running on the target machine. It exposes UI Automation capabilities via a gRPC API with two approaches:
+   - **Direct Element Work**: Fine-grained control for scripts and known UI hierarchies.
+   - **App Structure (LLM-Friendly)**: High-level JSON representation for AI-driven automation.
+2. **Library**: A .NET 6.0+ client SDK with async/await patterns.
+3. **AI Integration**: MCP server for connecting LLMs (Claude, Antigravity) directly to UI automation.
 
 ## Architecture
 
 ```mermaid
 graph TD
-    Client[Client App] -->|gRPC Command| Server[UiAutomation Service]
-    Server -->|UIA API| Target[Target Application]
-    Target -.->|UI State| Server
-    Server -.->|Status/Response| Client
-    classDef client fill:#0d548c,stroke:#4c381e,stroke-width:2px;
-    classDef server fill:#4c381e,stroke:#0d548c,stroke-width:2px;
-    classDef target fill:#0d548c,stroke:#4c381e,stroke-width:2px;
+    subgraph Clients
+        Script[Automation Script]
+        LLM[LLM / AI Agent]
+    end
 
-    class Client client;
+    subgraph SDK
+        Library[UiAutomationGRPC.Library]
+        MCP[MCP Server]
+    end
+
+    Script --> Library
+    LLM --> MCP
+    Library -->|gRPC| Server[UiAutomationGRPC.Server]
+    MCP -->|gRPC| Server
+    Server -->|UIA API| Target[Target Application]
+
+    classDef client fill:#0d548c,stroke:#4c381e,stroke-width:2px;
+    classDef sdk fill:#2d6a4f,stroke:#4c381e,stroke-width:2px;
+    classDef server fill:#4c381e,stroke:#0d548c,stroke-width:2px;
+
+    class Script,LLM client;
+    class Library,MCP sdk;
     class Server server;
-    class Target target;
+    class Target client;
 ```
 
 ## Project Structure
 
--   **[UiAutomationGRPC.Server](./UiAutomationGRPC.Server)**
-    The generic host service. It implements the gRPC definitions and translates them into actual Windows UI Automation calls (e.g., `AutomationElement.Find(...)`). It can be installed as a Windows Service.
+### [UiAutomationGRPC.Server](./UiAutomationGRPC.Server)
 
--   **[UiAutomationGRPC.Library](./UiAutomationGRPC.Library)**
-    The client-side SDK. It hides the complexity of gRPC and provides a clean C# API (e.g., `driver.FindElement(...)`) for developers to write automation scripts.
+The core gRPC service with **two automation approaches**:
 
--   **[UiAutomationGRPC.Client](./UiAutomationGRPC.Client)**
-    A sample console application demonstrating how to use the Library to automate the Windows Calculator. It serves as a reference implementation for your own test projects.
+| Approach | Best For | Key Methods |
+|----------|----------|-------------|
+| **Direct Element Work** | Scripts, known UI | `FindElement`, `GetChildren`, `PerformAction` |
+| **App Structure** | LLMs, dynamic exploration | `GetAppStructure`, `PerformActionWithStructure` |
+
+---
+
+### [UiAutomationGRPC.Library](./UiAutomationGRPC.Library)
+
+The client-side SDK for .NET applications.
+
+- **Target**: .NET 6.0+
+- **API Style**: Async/await with `UiAutomationDriver`
+- **Helpers**: `VirtualMouse`, `VirtualKeyboard` for input simulation
+
+---
+
+### [UiAutomationGRPC.AI](./UiAutomationGRPC.AI)
+
+Tools for AI/LLM integration:
+
+- **[MCP Server](./UiAutomationGRPC.AI/MCP)**: Model Context Protocol server exposing tools (`open_app`, `get_app_structure`, `perform_action`, `perform_action_with_structure`, `close_app`) for Claude/Antigravity.
+- **[Skill](./UiAutomationGRPC.AI/Skill)**: Pre-built skill definitions for AI assistants.
+
+---
+
+### [UiAutomationGRPC.Client](./UiAutomationGRPC.Client)
+
+Sample console application demonstrating Calculator automation. Reference implementation for your own projects.
 
 ## Getting Started
 
 ### 1. Requirements
--   **Server Machine**: Windows OS, Administrator privileges (for Service installation).
--   **Development**: .NET Framework 4.7.2 or later.
+
+| Component | Requirement |
+|-----------|-------------|
+| **Server** | Windows OS, .NET Framework 4.7.2, Administrator privileges |
+| **Library** | .NET 6.0+ |
+| **MCP** | .NET 8 SDK |
 
 ### 2. Running the Server
-You can run the server as a console app for testing, or install it as a service for production.
 
 ```powershell
-# From UiAutomationGRPC.Server/bin/Debug/net472/
-.\UiAutomationGRPC.Server.exe
+cd UiAutomationGRPC.Server
+dotnet run
 ```
 
-### 3. Writing a Client
-Reference `UiAutomationGRPC.Library` in your project and connect to the server:
+Default endpoint: `localhost:50051`
+
+### 3. Using the Library
 
 ```csharp
 using UiAutomationGRPC.Library;
 
-// Connect to localhost (or remote IP)
-using (var driver = new UiAutomationDriver("127.0.0.1:50051"))
+await using var driver = new UiAutomationDriver("http://127.0.0.1:50051");
+
+// Open an application
+var (success, message, processId) = await driver.OpenAppAsync("calc");
+
+// Find and interact with elements
+var element = await driver.FindElementAsync(new FindElementRequest
 {
-    // Find generic element
-    var calcWindow = driver.FindElement(new SelectorModel 
-    { 
-        Conditions = new PropertyConditions().NameProperty("Calculator") 
-    });
-    
-    // Interact
-    // ...
-}
+    Condition = new Condition
+    {
+        PropertyCondition = new PropertyCondition
+        {
+            PropertyName = "AutomationId",
+            PropertyValue = "num9Button"
+        }
+    },
+    Scope = TreeScope.Descendants
+});
+
+await driver.PerformActionAsync(element.RuntimeId, ActionType.Invoke);
 ```
 
-See **[UiAutomationGRPC.Client/README.md](./UiAutomationGRPC.Client/README.md)** for a full tutorial.
+### 4. LLM Integration (MCP)
+
+Configure your MCP client to run the server:
+
+```powershell
+dotnet run --project UiAutomationGRPC.AI/MCP
+```
+
+The LLM can then use the "See → Think → Act" loop:
+1. `get_app_structure` - See the current UI state
+2. Analyze and decide on the next action
+3. `perform_action_with_structure` - Act and get updated state
+
+## Documentation
+
+- [Server README](./UiAutomationGRPC.Server/README.md) - Detailed API and approaches
+- [Library README](./UiAutomationGRPC.Library/README.md) - SDK usage guide
+- [MCP README](./UiAutomationGRPC.AI/MCP/README.md) - AI integration setup
+- [Client README](./UiAutomationGRPC.Client/README.md) - Example walkthrough
