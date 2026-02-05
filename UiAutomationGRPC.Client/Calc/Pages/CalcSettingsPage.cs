@@ -1,40 +1,37 @@
-﻿using System;
-using UiAutomationGRPC.Library;
+﻿using UiAutomationGRPC.Library;
 using UiAutomationGRPC.Library.Selectors;
 using UiAutomationGRPC.Library.Elements;
 
-namespace UiAutomationGRPC.Client.Calc.Pages
+namespace UiAutomationGRPC.Client.Calc.Pages;
+
+public class CalcSettingsPage<TPage> : BasePageObject<TPage> where TPage : BasePageObject<TPage>
 {
-    public class CalcSettingsPage<TPage> : BasePageObject<TPage> where TPage : BasePageObject<TPage>
+    private readonly CalcSettingsPageLocators _locators;
+
+    public CalcSettingsPage(UiAutomationDriver driver, TPage previousPage) : base(driver)
     {
-        private readonly CalcSettingsPageLocators _locators;
-
-        public CalcSettingsPage(UiAutomationDriver driver, TPage previousPage)  : base(driver)
-        {
-        
-            _driver = driver ?? throw new ArgumentNullException(nameof(driver));
-            _locators = new CalcSettingsPageLocators(driver);
-            // Optional: Wait for the app to be ready in constructor
-            _locators.BackButton.WaitForElementExist();
-        }
-
-        public CalcPage ClickBack()
-        {
-            _locators.BackButton.Click();
-            return new CalcPage(_driver);
-        }
+        _driver = driver ?? throw new ArgumentNullException(nameof(driver));
+        _locators = new CalcSettingsPageLocators(driver);
+        // Optional: Wait for the app to be ready in constructor
+        _locators.BackButton.WaitForElementExist();
     }
-    public class CalcSettingsPageLocators
+
+    public CalcPage ClickBack()
     {
-        private readonly UiAutomationDriver _driver;
-
-        public CalcSettingsPageLocators(UiAutomationDriver driver) => _driver = driver;
-
-        private IAutomationElement CreateElement(Func<BaseSelector> selector) => new UiElement(_driver, selector);
-
-        private Selector Window => new Selector(new PropertyConditions().NameProperty("Calculator"));
-
-        public IAutomationElement BackButton => CreateElement(() => Window.Descendants().NameContain("Back"));
-
+        _locators.BackButton.Click();
+        return new CalcPage(_driver);
     }
+}
+
+public class CalcSettingsPageLocators
+{
+    private readonly UiAutomationDriver _driver;
+
+    public CalcSettingsPageLocators(UiAutomationDriver driver) => _driver = driver;
+
+    private IAutomationElement CreateElement(Func<BaseSelector> selector) => new UiElement(_driver, selector);
+
+    private Selector Window => new Selector(new PropertyConditions().NameProperty("Calculator"));
+
+    public IAutomationElement BackButton => CreateElement(() => Window.Descendants().NameContain("Back"));
 }

@@ -1,84 +1,94 @@
-using System;
 using UiAutomationGRPC.Library;
 using UiAutomationGRPC.Library.Selectors;
-using UiAutomationGRPC.Library.Helpers;
 using UiAutomationGRPC.Library.Elements;
 
-namespace UiAutomationGRPC.Client.Calc.Pages
-{
-    public class CalcPage : BasePageObject<CalcPage>
-    {    
-        private readonly CalcPageLocators _locators;
-        public CalcPage(UiAutomationDriver driver) : base(driver)
-        {
-            // Optional: Wait for the app to be ready in constructor
-            _driver = driver;
-            _locators = new CalcPageLocators(driver);
-            _locators.ResultText.WaitForElementExist();
-        }
+namespace UiAutomationGRPC.Client.Calc.Pages;
 
-        public CalcPage ClickTwo()
-        {
-            _locators.ButtonTwo.Click();
-            return this;
-        }
-
-        public CalcPage ClickPlus()
-        {
-            _locators.ButtonPlus.Click();
-            return this;
-        }
-
-        public CalcPage ClickEqual()
-        {
-            _locators.ButtonEqual.Click();
-            return this;
-        }
-
-        public string GetResult()
-        {
-            return _locators.ResultText.Name();
-        }
-
-        public CalcNavigationPaget<CalcPage> ClickNavigationButton()
-        {
-            _locators.ResultText.Name();
-            return new CalcNavigationPaget<CalcPage>(_driver, this);
-        }
-
-        public CalcPage ClickResultText()
-        {
-            _locators.ResultText.Click();
-            return this;
-        }
-
-        public CalcPage SendKey(string key) {
-            KeyboardHelper.SendKey(key);
-            return this;
-        }
-
+public class CalcPage : BasePageObject<CalcPage>
+{    
+    private readonly CalcPageLocators _locators;
+    
+    public CalcPage(UiAutomationDriver driver) : base(driver)
+    {
+        // Optional: Wait for the app to be ready in constructor
+        _driver = driver;
+        _locators = new CalcPageLocators(driver);
+        _locators.ResultText.WaitForElementExist();
     }
 
-    public class CalcPageLocators
+    public CalcPage ClickTwo()
     {
-        private readonly UiAutomationDriver _driver;
+        _locators.ButtonTwo.Click();
+        return this;
+    }
 
-        public CalcPageLocators(UiAutomationDriver driver) => _driver = driver;
+    public CalcPage ClickPlus()
+    {
+        _locators.ButtonPlus.Click();
+        return this;
+    }
 
-        private IAutomationElement CreateElement(Func<BaseSelector> selector) => new UiElement(_driver, selector);
+    public CalcPage ClickEqual()
+    {
+        _locators.ButtonEqual.Click();
+        return this;
+    }
 
-        private Selector Window => new Selector(new PropertyConditions().NameProperty("Calculator"));
+    public string GetResult()
+    {
+        return _locators.ResultText.Name();
+    }
 
-        private IAutomationElement E(string automationId) =>
-            CreateElement(() => Window.Descendants(new PropertyConditions().AutomationIdProperty(automationId)));
+    public CalcNavigationPaget<CalcPage> ClickNavigationButton()
+    {
+        _locators.ResultText.Name();
+        return new CalcNavigationPaget<CalcPage>(_driver, this);
+    }
 
-        public IAutomationElement ButtonOne => E("num1Button");
-        public IAutomationElement ButtonTwo => E("num2Button");
-        public IAutomationElement ButtonPlus => E("plusButton");
-        public IAutomationElement ButtonEqual => E("equalButton");
-        public IAutomationElement ResultText => E("CalculatorResults");
-        public IAutomationElement NavigationButton => CreateElement(() => Window.Descendants().ControlType("Button").NameContain("Close Navigation"));
+    public CalcPage ClickResultText()
+    {
+        _locators.ResultText.Click();
+        return this;
+    }
 
+    /// <summary>
+    /// Sends a key using the VirtualKeyboard (async).
+    /// For the fluent sync pattern, this returns immediately after queuing.
+    /// </summary>
+    public CalcPage SendKey(string key)
+    {
+        // Fire and forget for fluent pattern - use SendKeyAsync directly for proper async handling
+        _ = Keyboard.SendKeyAsync(key);
+        return this;
+    }
 
+    /// <summary>
+    /// Sends a key asynchronously using VirtualKeyboard.
+    /// </summary>
+    public async Task<CalcPage> SendKeyAsync(string key)
+    {
+        await Keyboard.SendKeyAsync(key);
+        return this;
+    }
 }
+
+public class CalcPageLocators
+{
+    private readonly UiAutomationDriver _driver;
+
+    public CalcPageLocators(UiAutomationDriver driver) => _driver = driver;
+
+    private IAutomationElement CreateElement(Func<BaseSelector> selector) => new UiElement(_driver, selector);
+
+    private Selector Window => new Selector(new PropertyConditions().NameProperty("Calculator"));
+
+    private IAutomationElement E(string automationId) =>
+        CreateElement(() => Window.Descendants(new PropertyConditions().AutomationIdProperty(automationId)));
+
+    public IAutomationElement ButtonOne => E("num1Button");
+    public IAutomationElement ButtonTwo => E("num2Button");
+    public IAutomationElement ButtonPlus => E("plusButton");
+    public IAutomationElement ButtonEqual => E("equalButton");
+    public IAutomationElement ResultText => E("CalculatorResults");
+    public IAutomationElement NavigationButton => CreateElement(() => Window.Descendants().ControlType("Button").NameContain("Close Navigation"));
 }
