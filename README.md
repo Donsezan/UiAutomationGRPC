@@ -147,24 +147,38 @@ The LLM can then use the "See → Think → Act" loop:
 
 ## Security
 
-UiAutomationGRPC supports TLS encryption and token-based authentication.
+UiAutomationGRPC supports TLS encryption and token-based authentication. Configuration can be managed via a local `uiautomation.config.json` file or environment variables.
 
 ### 1. Generating Certificates
 Use the provided scripts to generate self-signed certificates for your environment:
 - **Windows**: `powershell ./scripts/GenerateCerts.ps1 -Hostname "your-server-hostname"`
 - **Linux/macOS/Git Bash**: `./scripts/generate_certs.sh your-server-hostname`
 
-### 2. Server Configuration
-Set the following environment variables on the machine running the Server:
-- `UIA_AUTH_TOKEN`: The secret token clients must provide.
-- `UIA_SERVER_CERT_PATH`: Path to `server.crt`.
-- `UIA_SERVER_KEY_PATH`: Path to `server.key`.
+### 2. Configuration (`uiautomation.config.json`)
+You can create a `uiautomation.config.json` file in the working directory of the Server or MCP client. See `uiautomation.config.json.template` for the structure:
 
-### 3. Client Configuration (Library & MCP)
-Set these environment variables for the clients:
-- `UIA_AUTH_TOKEN`: Must match the server's token.
-- `UIA_SERVER_ADDRESS`: e.g., `https://your-server-hostname:50051`.
-- `UIA_ALLOW_UNSECURE_TLS`: Set to `true` if using self-signed certificates without a trusted CA.
+```json
+{
+  "Server": {
+    "Address": "0.0.0.0:50051",
+    "AuthToken": "your-secret-token-here",
+    "CertificatePath": "certs/server.crt",
+    "PrivateKeyPath": "certs/server.key"
+  },
+  "Client": {
+    "ServerAddress": "https://localhost:50051",
+    "AuthToken": "your-secret-token-here",
+    "AllowUnsecureTls": true
+  }
+}
+```
+
+### 3. Environment Variables (Fallback)
+The following environment variables are supported as fallbacks:
+- `UIA_AUTH_TOKEN`: The secret token.
+- `UIA_SERVER_CERT_PATH` / `UIA_SERVER_KEY_PATH`: Paths to server certificates.
+- `UIA_SERVER_ADDRESS`: Server address for clients (e.g., `https://localhost:50051`).
+- `UIA_ALLOW_UNSECURE_TLS`: Set to `true` to skip certificate validation.
 
 ## Documentation
 

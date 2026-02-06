@@ -8,6 +8,7 @@ using Grpc.Core.Interceptors;
 using Grpc.Reflection;
 using Grpc.Reflection.V1Alpha;
 using UiAutomation;
+using UiAutomationGRPC.Server.Models;
 
 namespace UiAutomationGRPC.Server.Services
 {
@@ -19,9 +20,13 @@ namespace UiAutomationGRPC.Server.Services
         {
             try
             {
-                string authToken = Environment.GetEnvironmentVariable("UIA_AUTH_TOKEN");
-                string certPath = Environment.GetEnvironmentVariable("UIA_SERVER_CERT_PATH") ?? "certs/server.crt";
-                string keyPath = Environment.GetEnvironmentVariable("UIA_SERVER_KEY_PATH") ?? "certs/server.key";
+                var config = ServerConfig.Load();
+
+                // Fallback to environment variables if not in config for backward compatibility or flexibility
+                string authToken = config.AuthToken ?? Environment.GetEnvironmentVariable("UIA_AUTH_TOKEN");
+                string certPath = config.CertificatePath ?? Environment.GetEnvironmentVariable("UIA_SERVER_CERT_PATH") ?? "certs/server.crt";
+                string keyPath = config.PrivateKeyPath ?? Environment.GetEnvironmentVariable("UIA_SERVER_KEY_PATH") ?? "certs/server.key";
+                string address = config.Address ?? "0.0.0.0:50051";
 
                 ServerCredentials credentials = ServerCredentials.Insecure;
                 if (File.Exists(certPath) && File.Exists(keyPath))
@@ -34,27 +39,32 @@ namespace UiAutomationGRPC.Server.Services
                 }
                 else
                 {
-                    Console.WriteLine("Certificates not found. Falling back to Insecure connection.");
+                    Console.WriteLine("Certificates not found or path invalid. Falling back to Insecure connection.");
                 }
 
                 var uiService = UiAutomation.UiAutomationService.BindService(new UiAutomationService());
                 if (!string.IsNullOrEmpty(authToken))
                 {
-                    Console.WriteLine("Authentication enabled via UIA_AUTH_TOKEN.");
+                    Console.WriteLine("Authentication enabled.");
                     uiService = uiService.Intercept(new AuthInterceptor(authToken));
                 }
 
                 var reflectionServiceImpl = new ReflectionServiceImpl(UiAutomation.UiAutomationService.Descriptor, ServerReflection.Descriptor);
+
+                string[] hostPort = address.Split(':');
+                string host = hostPort[0];
+                int port = hostPort.Length > 1 ? int.Parse(hostPort[1]) : 50051;
+
                 _server = new Grpc.Core.Server
                 {
                     Services = {
                         uiService,
                         ServerReflection.BindService(reflectionServiceImpl)
                     },
-                    Ports = { new ServerPort("0.0.0.0", 50051, credentials) }
+                    Ports = { new ServerPort(host, port, credentials) }
                 };
                 _server.Start();
-                Console.WriteLine("gRPC Server started on port 50051");
+                Console.WriteLine($"gRPC Server started on {address}");
             }
             catch (Exception ex)
             {

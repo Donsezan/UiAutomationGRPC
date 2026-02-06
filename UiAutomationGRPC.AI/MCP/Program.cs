@@ -11,9 +11,11 @@ namespace UiAutomationGRPC.LLM
     {
         static async Task Main(string[] args)
         {
-            string address = Environment.GetEnvironmentVariable("UIA_SERVER_ADDRESS") ?? "http://localhost:50051";
-            string? token = Environment.GetEnvironmentVariable("UIA_AUTH_TOKEN");
-            bool allowUnsecureTls = Environment.GetEnvironmentVariable("UIA_ALLOW_UNSECURE_TLS")?.ToLower() == "true";
+            var config = ClientConfig.Load();
+
+            string address = config.ServerAddress ?? Environment.GetEnvironmentVariable("UIA_SERVER_ADDRESS") ?? "http://localhost:50051";
+            string? token = config.AuthToken ?? Environment.GetEnvironmentVariable("UIA_AUTH_TOKEN");
+            bool allowUnsecureTls = config.AllowUnsecureTls || Environment.GetEnvironmentVariable("UIA_ALLOW_UNSECURE_TLS")?.ToLower() == "true";
 
             try 
             {
