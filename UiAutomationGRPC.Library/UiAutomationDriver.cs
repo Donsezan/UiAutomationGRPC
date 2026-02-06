@@ -1,3 +1,5 @@
+using Grpc.Core;
+using Grpc.Core.Interceptors;
 using Grpc.Net.Client;
 using UiAutomation;
 
@@ -20,10 +22,53 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// Initializes a new instance of the <see cref="UiAutomationDriver"/> class.
     /// </summary>
     /// <param name="address">The address of the gRPC server.</param>
-    public UiAutomationDriver(string address = "http://127.0.0.1:50051")
+    /// <param name="token">Optional authentication token.</param>
+    /// <param name="allowUnsecureTls">If true, skips TLS certificate validation (useful for self-signed certs).</param>
+    public UiAutomationDriver(string address = "http://127.0.0.1:50051", string? token = null, bool allowUnsecureTls = false)
     {
-        _channel = GrpcChannel.ForAddress(address);
-        Client = new UiAutomationService.UiAutomationServiceClient(_channel);
+        var channelOptions = new GrpcChannelOptions();
+
+        if (allowUnsecureTls || address.StartsWith("https"))
+        {
+            var httpHandler = new HttpClientHandler();
+            if (allowUnsecureTls)
+            {
+                httpHandler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+            }
+            channelOptions.HttpHandler = httpHandler;
+        }
+
+        _channel = GrpcChannel.ForAddress(address, channelOptions);
+
+        if (!string.IsNullOrEmpty(token))
+        {
+            var invoker = _channel.Intercept(new ClientAuthInterceptor(token));
+            Client = new UiAutomationService.UiAutomationServiceClient(invoker);
+        }
+        else
+        {
+            Client = new UiAutomationService.UiAutomationServiceClient(_channel);
+        }
+    }
+
+    private class ClientAuthInterceptor : Interceptor
+    {
+        private readonly string _token;
+        public ClientAuthInterceptor(string token) => _token = token;
+
+        public override AsyncUnaryCall<TResponse> AsyncUnaryCall<TRequest, TResponse>(
+            TRequest request,
+            ClientInterceptorContext<TRequest, TResponse> context,
+            AsyncUnaryCallContinuation<TRequest, TResponse> continuation)
+        {
+            var metadata = context.Options.Headers ?? new Metadata();
+            metadata.Add("x-auth-token", _token);
+
+            var newOptions = context.Options.WithHeaders(metadata);
+            var newContext = new ClientInterceptorContext<TRequest, TResponse>(context.Method, context.Host, newOptions);
+
+            return continuation(request, newContext);
+        }
     }
 
     #region App Management

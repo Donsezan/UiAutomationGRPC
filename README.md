@@ -145,6 +145,27 @@ The LLM can then use the "See → Think → Act" loop:
 2. Analyze and decide on the next action
 3. `perform_action_with_structure` - Act and get updated state
 
+## Security
+
+UiAutomationGRPC supports TLS encryption and token-based authentication.
+
+### 1. Generating Certificates
+Use the provided scripts to generate self-signed certificates for your environment:
+- **Windows**: `powershell ./scripts/GenerateCerts.ps1 -Hostname "your-server-hostname"`
+- **Linux/macOS/Git Bash**: `./scripts/generate_certs.sh your-server-hostname`
+
+### 2. Server Configuration
+Set the following environment variables on the machine running the Server:
+- `UIA_AUTH_TOKEN`: The secret token clients must provide.
+- `UIA_SERVER_CERT_PATH`: Path to `server.crt`.
+- `UIA_SERVER_KEY_PATH`: Path to `server.key`.
+
+### 3. Client Configuration (Library & MCP)
+Set these environment variables for the clients:
+- `UIA_AUTH_TOKEN`: Must match the server's token.
+- `UIA_SERVER_ADDRESS`: e.g., `https://your-server-hostname:50051`.
+- `UIA_ALLOW_UNSECURE_TLS`: Set to `true` if using self-signed certificates without a trusted CA.
+
 ## Documentation
 
 - [Server README](./UiAutomationGRPC.Server/README.md) - Detailed API and approaches

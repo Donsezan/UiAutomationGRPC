@@ -1,5 +1,7 @@
 using System;
 using System.Threading.Tasks;
+using Grpc.Core;
+using Grpc.Core.Interceptors;
 using Grpc.Net.Client;
 using UiAutomation;
 
@@ -9,16 +11,35 @@ namespace UiAutomationGRPC.LLM
     {
         static async Task Main(string[] args)
         {
-            // Allow http connections for gRPC
-            // AppContext.SetSwitch("System.Net.Http.SocketsHttpHandler.Http2UnencryptedSupport", true);
+            string address = Environment.GetEnvironmentVariable("UIA_SERVER_ADDRESS") ?? "http://localhost:50051";
+            string? token = Environment.GetEnvironmentVariable("UIA_AUTH_TOKEN");
+            bool allowUnsecureTls = Environment.GetEnvironmentVariable("UIA_ALLOW_UNSECURE_TLS")?.ToLower() == "true";
 
-            // The unified Server listens on 50051
-            var address = "http://localhost:50051";
-            
             try 
             {
-                using var channel = GrpcChannel.ForAddress(address);
-                var client = new UiAutomationService.UiAutomationServiceClient(channel);
+                var channelOptions = new GrpcChannelOptions();
+                if (allowUnsecureTls || address.StartsWith("https"))
+                {
+                    var httpHandler = new HttpClientHandler();
+                    if (allowUnsecureTls)
+                    {
+                        httpHandler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+                    }
+                    channelOptions.HttpHandler = httpHandler;
+                }
+
+                using var channel = GrpcChannel.ForAddress(address, channelOptions);
+
+                UiAutomationService.UiAutomationServiceClient client;
+                if (!string.IsNullOrEmpty(token))
+                {
+                    var invoker = channel.Intercept(new ClientAuthInterceptor(token));
+                    client = new UiAutomationService.UiAutomationServiceClient(invoker);
+                }
+                else
+                {
+                    client = new UiAutomationService.UiAutomationServiceClient(channel);
+                }
                 
                 var server = new McpServer(client);
                 await server.RunAsync();
@@ -27,6 +48,26 @@ namespace UiAutomationGRPC.LLM
             {
                 Console.Error.WriteLine($"Fatal Error: {ex.Message}");
                 Environment.Exit(1);
+            }
+        }
+
+        private class ClientAuthInterceptor : Interceptor
+        {
+            private readonly string _token;
+            public ClientAuthInterceptor(string token) => _token = token;
+
+            public override AsyncUnaryCall<TResponse> AsyncUnaryCall<TRequest, TResponse>(
+                TRequest request,
+                ClientInterceptorContext<TRequest, TResponse> context,
+                AsyncUnaryCallContinuation<TRequest, TResponse> continuation)
+            {
+                var metadata = context.Options.Headers ?? new Metadata();
+                metadata.Add("x-auth-token", _token);
+
+                var newOptions = context.Options.WithHeaders(metadata);
+                var newContext = new ClientInterceptorContext<TRequest, TResponse>(context.Method, context.Host, newOptions);
+
+                return continuation(request, newContext);
             }
         }
     }

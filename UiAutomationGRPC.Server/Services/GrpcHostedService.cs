@@ -1,8 +1,10 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using System.IO;
 using Microsoft.Extensions.Hosting;
 using Grpc.Core;
+using Grpc.Core.Interceptors;
 using Grpc.Reflection;
 using Grpc.Reflection.V1Alpha;
 using UiAutomation;
@@ -17,14 +19,39 @@ namespace UiAutomationGRPC.Server.Services
         {
             try
             {
+                string authToken = Environment.GetEnvironmentVariable("UIA_AUTH_TOKEN");
+                string certPath = Environment.GetEnvironmentVariable("UIA_SERVER_CERT_PATH") ?? "certs/server.crt";
+                string keyPath = Environment.GetEnvironmentVariable("UIA_SERVER_KEY_PATH") ?? "certs/server.key";
+
+                ServerCredentials credentials = ServerCredentials.Insecure;
+                if (File.Exists(certPath) && File.Exists(keyPath))
+                {
+                    Console.WriteLine($"Loading certificates from {certPath} and {keyPath}");
+                    var serverCert = File.ReadAllText(certPath);
+                    var serverKey = File.ReadAllText(keyPath);
+                    var keyCertPair = new KeyCertificatePair(serverCert, serverKey);
+                    credentials = new SslServerCredentials(new[] { keyCertPair });
+                }
+                else
+                {
+                    Console.WriteLine("Certificates not found. Falling back to Insecure connection.");
+                }
+
+                var uiService = UiAutomation.UiAutomationService.BindService(new UiAutomationService());
+                if (!string.IsNullOrEmpty(authToken))
+                {
+                    Console.WriteLine("Authentication enabled via UIA_AUTH_TOKEN.");
+                    uiService = uiService.Intercept(new AuthInterceptor(authToken));
+                }
+
                 var reflectionServiceImpl = new ReflectionServiceImpl(UiAutomation.UiAutomationService.Descriptor, ServerReflection.Descriptor);
                 _server = new Grpc.Core.Server
                 {
                     Services = {
-                        UiAutomation.UiAutomationService.BindService(new UiAutomationService()),
+                        uiService,
                         ServerReflection.BindService(reflectionServiceImpl)
                     },
-                    Ports = { new ServerPort("127.0.0.1", 50051, ServerCredentials.Insecure) }
+                    Ports = { new ServerPort("0.0.0.0", 50051, credentials) }
                 };
                 _server.Start();
                 Console.WriteLine("gRPC Server started on port 50051");
