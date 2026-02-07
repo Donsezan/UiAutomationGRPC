@@ -10,6 +10,7 @@ namespace UiAutomationGRPC.Server.Models
         public string AuthToken { get; set; }
         public string CertificatePath { get; set; } = "certs/server.crt";
         public string PrivateKeyPath { get; set; } = "certs/server.key";
+        public bool Insecure { get; set; }
 
         public static ServerConfig Load(string path = "uiautomation.config.json")
         {

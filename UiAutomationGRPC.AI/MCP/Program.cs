@@ -17,6 +17,13 @@ namespace UiAutomationGRPC.LLM
             string? token = config.AuthToken;
             bool allowUnsecureTls = config.AllowUnsecureTls;
 
+            if (config.Insecure)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.Error.WriteLine("WARNING: Insecure mode is enabled. Communication will not be encrypted.");
+                Console.ResetColor();
+            }
+
             try 
             {
                 var channelOptions = new GrpcChannelOptions();

@@ -28,7 +28,14 @@ namespace UiAutomationGRPC.Server.Services
                 string address = config.Address ?? "0.0.0.0:50051";
 
                 ServerCredentials credentials = ServerCredentials.Insecure;
-                if (File.Exists(certPath) && File.Exists(keyPath))
+
+                if (config.Insecure)
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("WARNING: Insecure mode is enabled. Communication will not be encrypted.");
+                    Console.ResetColor();
+                }
+                else if (File.Exists(certPath) && File.Exists(keyPath))
                 {
                     Console.WriteLine($"Loading certificates from {certPath} and {keyPath}");
                     var serverCert = File.ReadAllText(certPath);
@@ -38,7 +45,9 @@ namespace UiAutomationGRPC.Server.Services
                 }
                 else
                 {
-                    Console.WriteLine("Certificates not found or path invalid. Falling back to Insecure connection.");
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("WARNING: Certificates not found. Falling back to Insecure connection.");
+                    Console.ResetColor();
                 }
 
                 var uiService = UiAutomation.UiAutomationService.BindService(new UiAutomationService());

@@ -32,6 +32,13 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     public static UiAutomationDriver FromConfig(string configPath = "uiautomation.config.json")
     {
         var config = ClientConfig.Load(configPath);
+        if (config.Insecure)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("WARNING: Insecure mode is enabled. Communication will not be encrypted.");
+            Console.ResetColor();
+        }
+
         return new UiAutomationDriver(
             config.ServerAddress ?? "http://127.0.0.1:50051",
             config.AuthToken,

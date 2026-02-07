@@ -9,6 +9,7 @@ namespace UiAutomationGRPC.Library
         public string? ServerAddress { get; set; } = "http://localhost:50051";
         public string? AuthToken { get; set; }
         public bool AllowUnsecureTls { get; set; }
+        public bool Insecure { get; set; }
 
         public static ClientConfig Load(string path = "uiautomation.config.json")
         {

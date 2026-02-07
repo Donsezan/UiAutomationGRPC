@@ -163,15 +163,20 @@ You can create a `uiautomation.config.json` file in the working directory of the
     "Address": "0.0.0.0:50051",
     "AuthToken": "your-secret-token-here",
     "CertificatePath": "certs/server.crt",
-    "PrivateKeyPath": "certs/server.key"
+    "PrivateKeyPath": "certs/server.key",
+    "Insecure": false
   },
   "Client": {
     "ServerAddress": "https://localhost:50051",
     "AuthToken": "your-secret-token-here",
-    "AllowUnsecureTls": true
+    "AllowUnsecureTls": true,
+    "Insecure": false
   }
 }
 ```
+
+### 3. Insecure Mode
+If you need to disable TLS encryption (e.g., for local testing), set `"Insecure": true` in both Server and Client configurations. A red warning message will be displayed at startup if this mode is active.
 
 
 ## Documentation

@@ -3,11 +3,13 @@
     "Address": "0.0.0.0:50051",
     "AuthToken": "your-secret-token-here",
     "CertificatePath": "certs/server.crt",
-    "PrivateKeyPath": "certs/server.key"
+    "PrivateKeyPath": "certs/server.key",
+    "Insecure": false
   },
   "Client": {
     "ServerAddress": "https://localhost:50051",
     "AuthToken": "your-secret-token-here",
-    "AllowUnsecureTls": true
+    "AllowUnsecureTls": true,
+    "Insecure": false
   }
 }
