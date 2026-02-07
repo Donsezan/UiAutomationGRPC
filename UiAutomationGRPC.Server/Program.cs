@@ -44,17 +44,17 @@ public class Program
                         listenOptions.Protocols = HttpProtocols.Http2;
                         listenOptions.UseHttps(cert);
                     });
-                    Console.WriteLine($"╔════════════════════════════════════════════════════════════════╗");
-                    Console.WriteLine($"║  ✓ SECURE MODE: gRPC Server listening on https://0.0.0.0:{port}  ║");
-                    Console.WriteLine($"╚════════════════════════════════════════════════════════════════╝");
+                    Console.WriteLine($"╔══════════════════════════════════════════════════════════════════╗");
+                    Console.WriteLine($"║  ✓ SECURE MODE: gRPC Server listening on https://0.0.0.0:{port}  ");
+                    Console.WriteLine($"╚══════════════════════════════════════════════════════════════════╝");
                 }
                 else
                 {
                     Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine($"╔════════════════════════════════════════════════════════════════╗");
+                    Console.WriteLine($"╔═══════════════════════════════════════════════════════════════╗");
                     Console.WriteLine($"║  ✗ ERROR: Security enabled but certificate not found!         ║");
-                    Console.WriteLine($"║  Certificate path: {certPath,-43} ║");
-                    Console.WriteLine($"╚════════════════════════════════════════════════════════════════╝");
+                    Console.WriteLine($"║  Certificate path: {certPath,-43} ");
+                    Console.WriteLine($"╚═══════════════════════════════════════════════════════════════╝");
                     Console.ResetColor();
                     Environment.Exit(1);
                 }
@@ -68,11 +68,11 @@ public class Program
                 });
                 
                 Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine($"╔════════════════════════════════════════════════════════════════╗");
-                Console.WriteLine($"║  ⚠️  WARNING: INSECURE MODE - CONNECTION IS NOT ENCRYPTED  ⚠️   ║");
-                Console.WriteLine($"║  This mode should only be used for development/testing.       ║");
-                Console.WriteLine($"║  gRPC Server listening on http://0.0.0.0:{port,-24} ║");
-                Console.WriteLine($"╚════════════════════════════════════════════════════════════════╝");
+                Console.WriteLine($"╔═══════════════════════════════════════════════════════════════╗");
+                Console.WriteLine($"║  !! WARNING: INSECURE MODE - CONNECTION IS NOT ENCRYPTED !!  ║");
+                Console.WriteLine($"║  This mode should only be used for development/testing.      ║");
+                Console.WriteLine($"║  gRPC Server listening on http://0.0.0.0:{port,-22}          ");
+                Console.WriteLine($"╚═══════════════════════════════════════════════════════════════╝");
                 Console.ResetColor();
             }
         });
@@ -87,6 +87,9 @@ public class Program
             }
             options.Interceptors.Add<AuditInterceptor>();
         });
+
+        // Add gRPC reflection for service discovery (required for MapGrpcReflectionService)
+        builder.Services.AddGrpcReflection();
 
         // Support for running as Windows Service
         builder.Host.UseWindowsService();
