@@ -1,10 +1,5 @@
 using Grpc.Core;
 using Grpc.Core.Interceptors;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace UiAutomationGRPC.Server.Services;
 
@@ -22,7 +17,7 @@ public class TokenAuthInterceptor : Interceptor
     {
         _configuration = configuration;
         _logger = logger;
-        _validTokens = _configuration.GetSection("Security:ValidTokens").Get<string[]>() ?? Array.Empty<string>();
+        _validTokens = configuration.GetSection("Security:ValidTokens").Get<string[]>() ?? Array.Empty<string>();
     }
 
     public override async Task<TResponse> UnaryServerHandler<TRequest, TResponse>(

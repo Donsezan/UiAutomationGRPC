@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using UiAutomation;
+﻿using UiAutomation;
 
 namespace UiAutomationGRPC.Library.Selectors
 {

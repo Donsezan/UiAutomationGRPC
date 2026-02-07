@@ -2,7 +2,6 @@ using Grpc.Net.Client;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
 using UiAutomation;
-using System.Net.Http;
 
 namespace UiAutomationGRPC.Library;
 

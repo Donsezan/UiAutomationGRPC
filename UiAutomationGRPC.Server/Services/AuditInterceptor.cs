@@ -1,9 +1,6 @@
 using Grpc.Core;
 using Grpc.Core.Interceptors;
-using Microsoft.Extensions.Logging;
-using System;
 using System.Diagnostics;
-using System.Threading.Tasks;
 
 namespace UiAutomationGRPC.Server.Services;
 

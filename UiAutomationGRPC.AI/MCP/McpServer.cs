@@ -1,4 +1,4 @@
- using System;
+using System;
 using System.IO;
 using System.Text;
 using System.Collections.Generic;
@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UiAutomation;
-using Grpc.Core;
 
 namespace UiAutomationGRPC.LLM
 {

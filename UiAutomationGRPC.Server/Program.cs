@@ -1,15 +1,7 @@
-﻿using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Server.Kestrel.Core;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using System;
+﻿using Microsoft.AspNetCore.Server.Kestrel.Core;
 using System.IO;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
-using UiAutomationGRPC.Server;
 using UiAutomationGRPC.Server.Services;
 
 namespace UiAutomationGRPC.Server;

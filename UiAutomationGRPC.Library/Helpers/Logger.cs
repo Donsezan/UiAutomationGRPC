@@ -1,5 +1,4 @@
-﻿using System;
-using UiAutomationGRPC.Library.Elements;
+﻿using UiAutomationGRPC.Library.Elements;
 
 namespace UiAutomationGRPC.Library.Helpers
 {
