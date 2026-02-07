@@ -61,4 +61,28 @@ Or configure your MCP client (like Claude Desktop) to run:
 
 ## Configuration
 
-The server currently hardcodes the gRPC address to `http://localhost:50051`. Modify `Program.cs` to change this if needed.
+Configure the MCP server using environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `UIAUTOMATION_SERVER_ADDRESS` | gRPC server address | `https://localhost:50051` |
+| `UIAUTOMATION_AUTH_TOKEN` | Bearer token for authentication (if server has token auth enabled) | *(none)* |
+| `UIAUTOMATION_INSECURE_MODE` | Set to `true` to use HTTP instead of HTTPS | `false` |
+
+### Security Modes
+
+**Secure Mode (Default)**
+```powershell
+$env:UIAUTOMATION_SERVER_ADDRESS = "https://localhost:50051"
+$env:UIAUTOMATION_AUTH_TOKEN = "your-secret-token"
+dotnet run
+```
+
+**Insecure Mode (Development Only)**
+```powershell
+$env:UIAUTOMATION_SERVER_ADDRESS = "http://localhost:50051"
+$env:UIAUTOMATION_INSECURE_MODE = "true"
+dotnet run
+```
+
+> ⚠️ **Warning**: Insecure mode should only be used for development/testing. Production deployments should use HTTPS with token authentication.

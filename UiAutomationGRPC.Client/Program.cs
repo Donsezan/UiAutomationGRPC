@@ -12,7 +12,7 @@ class Program
         
         // UiAutomationDriver: The main entry point for interacting with the gRPC server.
         // It manages the connection and provides methods for app lifecycle as well as creating elements.
-        await using var driver = new UiAutomationDriver("http://127.0.0.1:50051");
+        await using var driver = new UiAutomationDriver("http://127.0.0.1:50051", insecureMode: true);
         
         try 
         {
