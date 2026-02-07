@@ -24,11 +24,25 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// <param name="address">The address of the gRPC server.</param>
     /// <param name="token">Optional authentication token.</param>
     /// <param name="allowUnsecureTls">If true, skips TLS certificate validation (useful for self-signed certs).</param>
+    /// <summary>
+    /// Static factory method to create a driver from a configuration file.
+    /// </summary>
+    /// <param name="configPath">Path to the uiautomation.config.json file.</param>
+    /// <returns>A new UiAutomationDriver instance.</returns>
+    public static UiAutomationDriver FromConfig(string configPath = "uiautomation.config.json")
+    {
+        var config = ClientConfig.Load(configPath);
+        return new UiAutomationDriver(
+            config.ServerAddress ?? "http://127.0.0.1:50051",
+            config.AuthToken,
+            config.AllowUnsecureTls);
+    }
+
     public UiAutomationDriver(string address = "http://127.0.0.1:50051", string? token = null, bool allowUnsecureTls = false)
     {
         var channelOptions = new GrpcChannelOptions();
 
-        if (allowUnsecureTls || address.StartsWith("https"))
+        if (allowUnsecureTls || address.StartsWith("https") || address.Contains(":443"))
         {
             var httpHandler = new HttpClientHandler();
             if (allowUnsecureTls)

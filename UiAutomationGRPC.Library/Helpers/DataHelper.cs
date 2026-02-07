@@ -23,43 +23,6 @@ public static class DataHelper
         return string.Concat(methodName.Select(x => char.IsUpper(x) ? " " + x : x.ToString())).TrimStart();
     }
 
-    /// <summary>
-    /// Sets a user-level environment variable.
-    /// </summary>
-    /// <param name="variableName">Name of the variable.</param>
-    /// <param name="variableValue">Value of the variable.</param>
-    public static void SetSystemGlobalVariable(string variableName, string variableValue)
-    {
-        try
-        {
-            Environment.SetEnvironmentVariable(variableName, variableValue, EnvironmentVariableTarget.User);
-            Console.WriteLine($"System global variable {GetSystemGlobalVariable(variableName)}");
-        }
-        catch
-        {
-            Console.WriteLine("Variable not created");
-        }
-    }
-
-    /// <summary>
-    /// Gets a user-level environment variable.
-    /// </summary>
-    /// <param name="variableName">Name of the variable.</param>
-    /// <returns>Value of the variable or null if not found.</returns>
-    public static string? GetSystemGlobalVariable(string variableName)
-    {
-        try
-        {
-            var variableValue = Environment.GetEnvironmentVariable(variableName, EnvironmentVariableTarget.User);
-            Console.WriteLine($"Variable {variableValue} found");
-            return variableValue;
-        }
-        catch
-        {
-            Console.WriteLine("Variable not found");
-            return null;
-        }
-    }
 
     #region System Time P/Invoke (Legacy)
 

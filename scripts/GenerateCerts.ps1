@@ -1,5 +1,5 @@
 # PowerShell script to generate self-signed certificates for UiAutomationGRPC
-$certDir = Join-Path $PSScriptRoot "certs"
+$certDir = Join-Path $PSScriptRoot "..\certs"
 if (-not (Test-Path $certDir)) {
     New-Item -ItemType Directory -Path $certDir
 }

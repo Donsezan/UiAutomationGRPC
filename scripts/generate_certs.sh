@@ -1,7 +1,12 @@
 #!/bin/bash
 
 # Directory to store certificates
-CERT_DIR="./certs"
+# Navigate to root if we are in scripts/
+if [[ "$PWD" == */scripts ]]; then
+    CERT_DIR="../certs"
+else
+    CERT_DIR="./certs"
+fi
 mkdir -p $CERT_DIR
 
 # Generate CA key and certificate

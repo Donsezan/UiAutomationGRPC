@@ -22,10 +22,9 @@ namespace UiAutomationGRPC.Server.Services
             {
                 var config = ServerConfig.Load();
 
-                // Fallback to environment variables if not in config for backward compatibility or flexibility
-                string authToken = config.AuthToken ?? Environment.GetEnvironmentVariable("UIA_AUTH_TOKEN");
-                string certPath = config.CertificatePath ?? Environment.GetEnvironmentVariable("UIA_SERVER_CERT_PATH") ?? "certs/server.crt";
-                string keyPath = config.PrivateKeyPath ?? Environment.GetEnvironmentVariable("UIA_SERVER_KEY_PATH") ?? "certs/server.key";
+                string authToken = config.AuthToken;
+                string certPath = config.CertificatePath ?? "certs/server.crt";
+                string keyPath = config.PrivateKeyPath ?? "certs/server.key";
                 string address = config.Address ?? "0.0.0.0:50051";
 
                 ServerCredentials credentials = ServerCredentials.Insecure;

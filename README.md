@@ -147,7 +147,7 @@ The LLM can then use the "See → Think → Act" loop:
 
 ## Security
 
-UiAutomationGRPC supports TLS encryption and token-based authentication. Configuration can be managed via a local `uiautomation.config.json` file or environment variables.
+UiAutomationGRPC supports TLS encryption and token-based authentication. Configuration is managed via a local `uiautomation.config.json` file.
 
 ### 1. Generating Certificates
 Use the provided scripts to generate self-signed certificates for your environment:
@@ -173,12 +173,6 @@ You can create a `uiautomation.config.json` file in the working directory of the
 }
 ```
 
-### 3. Environment Variables (Fallback)
-The following environment variables are supported as fallbacks:
-- `UIA_AUTH_TOKEN`: The secret token.
-- `UIA_SERVER_CERT_PATH` / `UIA_SERVER_KEY_PATH`: Paths to server certificates.
-- `UIA_SERVER_ADDRESS`: Server address for clients (e.g., `https://localhost:50051`).
-- `UIA_ALLOW_UNSECURE_TLS`: Set to `true` to skip certificate validation.
 
 ## Documentation
 
