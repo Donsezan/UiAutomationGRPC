@@ -46,8 +46,11 @@ namespace UiAutomationGRPC.Server.Services
                 else
                 {
                     Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("WARNING: Certificates not found. Falling back to Insecure connection.");
+                    Console.WriteLine("CRITICAL ERROR: Secure mode requested but certificates not found at:");
+                    Console.WriteLine($"Cert: {Path.GetFullPath(certPath)}");
+                    Console.WriteLine($"Key: {Path.GetFullPath(keyPath)}");
                     Console.ResetColor();
+                    throw new FileNotFoundException("GRPC Server failed to start: Certificates not found for secure connection.");
                 }
 
                 var uiService = UiAutomation.UiAutomationService.BindService(new UiAutomationService());

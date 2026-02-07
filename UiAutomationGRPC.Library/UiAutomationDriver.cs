@@ -38,9 +38,16 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
             Console.WriteLine("WARNING: Insecure mode is enabled. Communication will not be encrypted.");
             Console.ResetColor();
         }
+        else if (config.ServerAddress != null && config.ServerAddress.StartsWith("http://"))
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("CRITICAL ERROR: Secure connection requested but ServerAddress uses 'http'.");
+            Console.ResetColor();
+            throw new InvalidOperationException("Secure connection requested but ServerAddress uses 'http'. Use 'https' for secure connections or set 'Insecure' to true.");
+        }
 
         return new UiAutomationDriver(
-            config.ServerAddress ?? "http://127.0.0.1:50051",
+            config.ServerAddress ?? (config.Insecure ? "http://127.0.0.1:50051" : "https://127.0.0.1:50051"),
             config.AuthToken,
             config.AllowUnsecureTls);
     }

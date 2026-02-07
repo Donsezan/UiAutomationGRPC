@@ -13,7 +13,7 @@ namespace UiAutomationGRPC.LLM
         {
             var config = ClientConfig.Load();
 
-            string address = config.ServerAddress ?? "http://localhost:50051";
+            string address = config.ServerAddress ?? (config.Insecure ? "http://localhost:50051" : "https://localhost:50051");
             string? token = config.AuthToken;
             bool allowUnsecureTls = config.AllowUnsecureTls;
 
@@ -22,6 +22,13 @@ namespace UiAutomationGRPC.LLM
                 Console.ForegroundColor = ConsoleColor.Red;
                 Console.Error.WriteLine("WARNING: Insecure mode is enabled. Communication will not be encrypted.");
                 Console.ResetColor();
+            }
+            else if (address.StartsWith("http://"))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.Error.WriteLine("CRITICAL ERROR: Secure connection requested but ServerAddress uses 'http'.");
+                Console.ResetColor();
+                throw new InvalidOperationException("Secure connection requested but ServerAddress uses 'http'. Use 'https' for secure connections or set 'Insecure' to true.");
             }
 
             try 
