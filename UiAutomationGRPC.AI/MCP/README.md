@@ -33,6 +33,12 @@ Performs an action on a UI element and returns the updated app structure. Ideal 
 Closes an application by Process ID.
 - **process_id**: The Process ID to terminate.
 
+### `take_screenshot`
+Takes a screenshot of the application window or a specific element. Saves the image to a temp folder and returns the file path (so the LLM can access the image file).
+- **mode**: `element` or `window`.
+- **runtime_id**: Required for `element` mode, optional for `window` mode.
+- **process_id**: Optional, used for `window` mode if `runtime_id` is not provided.
+
 ## Prerequisites
 
 1. **UiAutomationGRPC.Server** must be running on port `50051`.

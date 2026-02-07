@@ -1,4 +1,4 @@
-using System;
+ using System;
 using System.IO;
 using System.Text;
 using System.Collections.Generic;
@@ -15,12 +15,15 @@ namespace UiAutomationGRPC.LLM
         private readonly UiAutomationService.UiAutomationServiceClient _client;
         private readonly Stream _inputStream;
         private readonly Stream _outputStream;
+        private readonly string _screenshotFolder;
 
         public McpServer(UiAutomationService.UiAutomationServiceClient client)
         {
             _client = client;
             _inputStream = Console.OpenStandardInput();
             _outputStream = Console.OpenStandardOutput();
+            _screenshotFolder = Path.Combine(Path.GetTempPath(), "UiAutomationGRPC_Screenshots");
+            Directory.CreateDirectory(_screenshotFolder);
         }
 
         public async Task RunAsync()
@@ -93,7 +96,8 @@ namespace UiAutomationGRPC.LLM
                             GetToolDefinition_GetAppStructure(),
                             GetToolDefinition_PerformAction(),
                             GetToolDefinition_PerformActionWithStructure(),
-                            GetToolDefinition_CloseApp()
+                            GetToolDefinition_CloseApp(),
+                            GetToolDefinition_TakeScreenshot()
                         }
                     }
                 };
@@ -123,6 +127,9 @@ namespace UiAutomationGRPC.LLM
                             break;
                         case "close_app":
                             resultData = await HandleCloseApp(args);
+                            break;
+                        case "take_screenshot":
+                            resultData = await HandleTakeScreenshot(args);
                             break;
                         default:
                             throw new Exception($"Unknown tool: {name}");
@@ -383,6 +390,82 @@ namespace UiAutomationGRPC.LLM
             });
 
             return new JObject { ["content"] = content, ["isError"] = !resp.Success };
+        }
+
+        private JObject GetToolDefinition_TakeScreenshot()
+        {
+            return JObject.FromObject(new
+            {
+                name = "take_screenshot",
+                description = "Takes a screenshot of the application window or a specific element. Returns the file path to the saved screenshot image.",
+                inputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        mode = new { type = "string", description = "Screenshot mode: 'element' for a specific element, 'window' for the entire window.", @enum = new[] { "element", "window" } },
+                        runtime_id = new { type = "string", description = "The runtime ID of the element (required for 'element' mode, optional for 'window' mode to capture that element's window)." },
+                        process_id = new { type = "integer", description = "Process ID (optional, used for 'window' mode if runtime_id is not provided)." }
+                    },
+                    required = new[] { "mode" }
+                }
+            });
+        }
+
+        private async Task<JObject> HandleTakeScreenshot(JObject? args)
+        {
+            if (args == null) throw new ArgumentNullException(nameof(args));
+
+            var modeStr = args["mode"]?.ToString()?.ToLowerInvariant() ?? "window";
+            var runtimeId = args["runtime_id"]?.ToString() ?? "";
+            var processId = args["process_id"]?.Value<int>() ?? 0;
+
+            var screenshotMode = modeStr == "element" 
+                ? ScreenshotMode.Element 
+                : ScreenshotMode.Window;
+
+            var req = new ScreenshotRequest
+            {
+                Mode = screenshotMode,
+                RuntimeId = runtimeId,
+                ProcessId = processId
+            };
+
+            var resp = await _client.TakeScreenshotAsync(req);
+
+            var content = new JArray();
+
+            if (resp.Success && resp.ImageData != null && resp.ImageData.Length > 0)
+            {
+                // Save to temp file
+                var fileName = $"screenshot_{DateTime.Now:yyyyMMdd_HHmmss_fff}.png";
+                var filePath = Path.Combine(_screenshotFolder, fileName);
+                File.WriteAllBytes(filePath, resp.ImageData.ToByteArray());
+
+                content.Add(new JObject
+                {
+                    ["type"] = "text",
+                    ["text"] = JsonConvert.SerializeObject(new 
+                    { 
+                        success = true, 
+                        message = "Screenshot saved successfully.",
+                        file_path = filePath,
+                        file_name = fileName
+                    })
+                });
+
+                return new JObject { ["content"] = content, ["isError"] = false };
+            }
+            else
+            {
+                content.Add(new JObject
+                {
+                    ["type"] = "text",
+                    ["text"] = JsonConvert.SerializeObject(new { success = false, message = resp.Message ?? "Failed to take screenshot." })
+                });
+
+                return new JObject { ["content"] = content, ["isError"] = true };
+            }
         }
     }
 }
