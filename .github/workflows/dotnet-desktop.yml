@@ -23,7 +23,7 @@ jobs:
       Server_Project_Path: UiAutomationGRPC.Server\UiAutomationGRPC.Server.csproj
       Client_Project_Path: UiAutomationGRPC.Client\UiAutomationGRPC.Client.csproj
       Library_Project_Path: UiAutomationGRPC.Library\UiAutomationGRPC.Library.csproj
-      MCP_Project_Path: UiAutomationGRPC.AI\MCP\UiAutomationGRPC.AI.MCP.csproj
+      MCP_Project_Path: UiAutomationGRPC.AI\MCP\UiAutomationGRPC.LLM.csproj
 
     steps:
     - name: Checkout
