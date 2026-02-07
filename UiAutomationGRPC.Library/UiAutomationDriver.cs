@@ -1,5 +1,8 @@
 using Grpc.Net.Client;
+using Grpc.Core;
+using Grpc.Core.Interceptors;
 using UiAutomation;
+using System.Net.Http;
 
 namespace UiAutomationGRPC.Library;
 
@@ -9,7 +12,10 @@ namespace UiAutomationGRPC.Library;
 public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
 {
     private readonly GrpcChannel _channel;
+    private readonly CallInvoker? _callInvoker;
     private bool _disposed;
+    private readonly bool _insecureMode;
+    private readonly string? _authToken;
 
     /// <summary>
     /// Internal gRPC client.
@@ -19,11 +25,67 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// <summary>
     /// Initializes a new instance of the <see cref="UiAutomationDriver"/> class.
     /// </summary>
-    /// <param name="address">The address of the gRPC server.</param>
-    public UiAutomationDriver(string address = "http://127.0.0.1:50051")
+    /// <param name="address">The address of the gRPC server. Defaults to secure HTTPS.</param>
+    /// <param name="authToken">Optional authentication token for secure connections.</param>
+    /// <param name="insecureMode">Set to true to use HTTP (insecure) connection.</param>
+    public UiAutomationDriver(string address = "https://127.0.0.1:50051", string? authToken = null, bool insecureMode = false)
     {
-        _channel = GrpcChannel.ForAddress(address);
-        Client = new UiAutomationService.UiAutomationServiceClient(_channel);
+        _insecureMode = insecureMode;
+        _authToken = authToken;
+
+        // Show warning for insecure mode
+        if (_insecureMode)
+        {
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.WriteLine("╔════════════════════════════════════════════════════════════════╗");
+            Console.WriteLine("║  ⚠️  WARNING: INSECURE MODE - CONNECTION IS NOT ENCRYPTED  ⚠️   ║");
+            Console.WriteLine("║  This mode should only be used for development/testing.       ║");
+            Console.WriteLine("╚════════════════════════════════════════════════════════════════╝");
+            Console.ResetColor();
+
+            // For insecure connections, ensure address uses http
+            if (address.StartsWith("https://"))
+            {
+                address = address.Replace("https://", "http://");
+            }
+        }
+        else
+        {
+            // For secure connections, ensure address uses https
+            if (address.StartsWith("http://") && !address.StartsWith("https://"))
+            {
+                address = address.Replace("http://", "https://");
+            }
+        }
+
+        // Configure channel options
+        var channelOptions = new GrpcChannelOptions();
+
+        if (_insecureMode)
+        {
+            // Allow HTTP/2 without TLS for development
+            channelOptions.HttpHandler = new SocketsHttpHandler
+            {
+                EnableMultipleHttp2Connections = true
+            };
+        }
+
+        _channel = GrpcChannel.ForAddress(address, channelOptions);
+
+        // If auth token provided, create call invoker with auth interceptor
+        if (!string.IsNullOrEmpty(_authToken))
+        {
+            _callInvoker = _channel.Intercept(metadata =>
+            {
+                metadata.Add("Authorization", $"Bearer {_authToken}");
+                return metadata;
+            });
+            Client = new UiAutomationService.UiAutomationServiceClient(_callInvoker);
+        }
+        else
+        {
+            Client = new UiAutomationService.UiAutomationServiceClient(_channel);
+        }
     }
 
     #region App Management
