@@ -1,4 +1,4 @@
-# UiAutomationGRPC
+# UiAutomationGRPC.Library
 
 A client library for remote Windows UI Automation using gRPC. This library allows you to control Windows applications remotely, perform UI interactions, and take screenshots via a driver-server architecture.
 
@@ -10,6 +10,7 @@ A client library for remote Windows UI Automation using gRPC. This library allow
 - **Element Interactions**: Click, type text, invoke, toggle, and more.
 - **Screenshots**: Capture screenshots of specific elements or the entire window.
 - **Keyboard & Mouse**: Full virtual keyboard and mouse support via helper classes.
+- **App Structure**: LLM-friendly JSON representation of the application UI tree.
 
 ## Installation
 
@@ -31,8 +32,11 @@ dotnet add package UiAutomationGRPC
 ```csharp
 using UiAutomationGRPC.Library;
 
-// Connect to the gRPC server
-await using var driver = new UiAutomationDriver("http://127.0.0.1:50051");
+// Connect to the gRPC server (insecure mode for development)
+await using var driver = new UiAutomationDriver("http://127.0.0.1:50051", insecureMode: true);
+
+// Or with authentication
+await using var driver = new UiAutomationDriver("https://127.0.0.1:50051", authToken: "your-token");
 ```
 
 ### 2. Open an Application
@@ -67,6 +71,8 @@ await driver.PerformActionAsync(element.RuntimeId, ActionType.Invoke);
 ### 4. Use Virtual Keyboard & Mouse
 
 ```csharp
+using UiAutomationGRPC.Library.Helpers;
+
 var keyboard = new VirtualKeyboard(driver);
 var mouse = new VirtualMouse(driver);
 
@@ -84,7 +90,19 @@ var (_, _, imageData) = await driver.TakeWindowScreenshotAsync(processId: proces
 File.WriteAllBytes("screenshot.png", imageData);
 ```
 
-### 6. Close Application
+### 6. Use App Structure (LLM-Friendly)
+
+```csharp
+// Get full UI tree as JSON
+var (success, message, json) = await driver.GetAppStructureAsync(appName: "calc");
+
+// Perform action and get updated structure
+var (_, _, updatedJson) = await driver.PerformActionWithStructureAsync(
+    runtimeId: "42,12345",
+    action: ActionType.LeftClick);
+```
+
+### 7. Close Application
 
 ```csharp
 await driver.CloseAppByProcessIdAsync(processId);
@@ -112,16 +130,23 @@ await driver.CloseAppByProcessIdAsync(processId);
 
 | Method | Description |
 |--------|-------------|
-| `MoveAsync` / `MoveToAsync` | Move cursor |
-| `LeftClickAsync` / `RightClickAsync` | Click operations |
-| `DoubleClickAsync` | Double click |
-| `ScrollAsync` | Mouse wheel scroll |
+| `MoveAsync` | Move cursor by relative delta |
+| `MoveToAsync` | Move cursor to element's clickable point |
+| `LeftClickAsync` | Left click (at position or on element) |
+| `LeftDownAsync` / `LeftUpAsync` | Press/release left button |
+| `RightClickAsync` | Right click (at position or on element) |
+| `RightDownAsync` / `RightUpAsync` | Press/release right button |
+| `DoubleClickAsync` | Double left click |
+| `MiddleClickAsync` | Middle mouse button click |
+| `ScrollAsync` | Scroll mouse wheel (raw delta) |
+| `ScrollStepsAsync` | Scroll by steps (1 step = 120 units) |
 
 ### VirtualKeyboard
 
 | Method | Description |
 |--------|-------------|
-| `SendAsync` / `SendWaitAsync` | Send key input |
+| `SendAsync` | Send keys without waiting |
+| `SendWaitAsync` | Send keys and wait for processing |
 | `SendKeyAsync` | Send single key with delay |
 
 ## License
