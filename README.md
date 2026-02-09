@@ -110,7 +110,7 @@ Default endpoint: `localhost:50051`
 ```csharp
 using UiAutomationGRPC.Library;
 
-await using var driver = new UiAutomationDriver("http://127.0.0.1:50051");
+await using var driver = new UiAutomationDriver("http://127.0.0.1:50051", insecureMode: true);
 
 // Open an application
 var (success, message, processId) = await driver.OpenAppAsync("calc");
