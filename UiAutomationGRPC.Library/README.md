@@ -108,6 +108,29 @@ var (_, _, updatedJson) = await driver.PerformActionWithStructureAsync(
 await driver.CloseAppByProcessIdAsync(processId);
 ```
 
+## Security Configuration
+
+The `UiAutomationDriver` constructor supports three connection modes:
+
+```csharp
+// 1. Default: HTTPS (requires server with Security.Enabled = true)
+await using var driver = new UiAutomationDriver("https://127.0.0.1:50051");
+
+// 2. Insecure mode: HTTP without encryption (development only)
+await using var driver = new UiAutomationDriver("http://127.0.0.1:50051", insecureMode: true);
+
+// 3. HTTPS + Token authentication (production)
+await using var driver = new UiAutomationDriver("https://127.0.0.1:50051", authToken: "your-secret-token");
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `address` | string | `"https://127.0.0.1:50051"` | Server address (http:// or https://) |
+| `authToken` | string? | `null` | Bearer token sent with every gRPC call |
+| `insecureMode` | bool | `false` | Use HTTP instead of HTTPS |
+
+> ⚠️ **Warning**: Insecure mode disables TLS encryption. Use only for local development. See [Server README](../UiAutomationGRPC.Server/README.md#security) for server-side security configuration.
+
 ## API Reference
 
 ### UiAutomationDriver

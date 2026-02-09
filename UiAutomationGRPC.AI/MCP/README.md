@@ -65,7 +65,7 @@ Configure the MCP server using environment variables:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `UIAUTOMATION_SERVER_ADDRESS` | gRPC server address | `https://localhost:50051` |
+| `UIAUTOMATION_SERVER_ADDRESS` | gRPC server address | `http://localhost:50051` |
 | `UIAUTOMATION_AUTH_TOKEN` | Bearer token for authentication (if server has token auth enabled) | *(none)* |
 | `UIAUTOMATION_INSECURE_MODE` | Set to `true` to use HTTP instead of HTTPS | `false` |
 

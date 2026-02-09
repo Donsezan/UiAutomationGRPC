@@ -40,7 +40,20 @@ The interaction follows a standard loop:
 6.  Continue clicking Plus, Five, Equals...
 ```
 
+## Security
+
+Security is configured on the **UiAutomationGRPC.Server** side (see [Server README](../UiAutomationGRPC.Server/README.md#security)). The MCP server connects to the gRPC server and must match its security mode:
+
+| Server Mode | MCP Configuration |
+|-------------|-------------------|
+| Insecure (HTTP) | `UIAUTOMATION_INSECURE_MODE=true` |
+| HTTPS | Default (uses HTTPS) |
+| HTTPS + Token | Set `UIAUTOMATION_AUTH_TOKEN` |
+
+> See [MCP README](./MCP/README.md#security-modes) for environment variable details.
+
 ## Related Documentation
 
-- [MCP Server README](./MCP/README.md) - Detailed tool documentation
+- [Server README](../UiAutomationGRPC.Server/README.md) - Server API, security, and configuration
+- [MCP Server README](./MCP/README.md) - Detailed MCP tool documentation
 - [Skill Instructions](./Skill/UiAutomationSkill/SKILL.md) - Full LLM skill definition
