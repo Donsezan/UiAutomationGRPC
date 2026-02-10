@@ -147,7 +147,103 @@ sc delete UiAutomationService
 
 ## Configuration
 
-Default gRPC endpoint: `localhost:50051`
+All configuration is done via `appsettings.json`:
+
+```json
+{
+  "Security": {
+    "Enabled": false,
+    "CertificatePath": "server.pfx",
+    "CertificatePassword": "",
+    "TokenAuthEnabled": false,
+    "ValidTokens": [],
+    "Port": 50051
+  },
+  "RateLimiting": {
+    "Enabled": false,
+    "RequestsPerMinute": 1000,
+    "RequestsPerSecond": 100,
+    "MaxConcurrentConnections": 50
+  }
+}
+```
+
+### Security Settings
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `Security:Enabled` | bool | `false` | Enable HTTPS with TLS certificate |
+| `Security:CertificatePath` | string | `"server.pfx"` | Path to the PFX certificate file |
+| `Security:CertificatePassword` | string | `""` | Password for the PFX certificate |
+| `Security:TokenAuthEnabled` | bool | `false` | Enable Bearer token authentication |
+| `Security:ValidTokens` | string[] | `[]` | List of accepted tokens |
+| `Security:Port` | int | `50051` | gRPC listening port |
+
+### Rate Limiting Settings
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `RateLimiting:Enabled` | bool | `false` | Enable request rate limiting |
+| `RateLimiting:RequestsPerMinute` | int | `1000` | Max requests per minute |
+| `RateLimiting:RequestsPerSecond` | int | `100` | Max requests per second |
+| `RateLimiting:MaxConcurrentConnections` | int | `50` | Max concurrent connections |
+
+## Security
+
+The server supports three security modes:
+
+### 1. Insecure Mode (Default)
+
+No encryption, no authentication — suitable for local development.
+
+```json
+{
+  "Security": {
+    "Enabled": false,
+    "Port": 50051
+  }
+}
+```
+
+Endpoint: `http://localhost:50051`
+
+### 2. HTTPS with Certificate
+
+Encrypted connections using a TLS certificate.
+
+```json
+{
+  "Security": {
+    "Enabled": true,
+    "CertificatePath": "server.pfx",
+    "CertificatePassword": "your-password",
+    "Port": 50051
+  }
+}
+```
+
+Endpoint: `https://localhost:50051`
+
+### 3. HTTPS + Token Authentication
+
+Encrypted connections with Bearer token validation on every request.
+
+```json
+{
+  "Security": {
+    "Enabled": true,
+    "CertificatePath": "server.pfx",
+    "CertificatePassword": "your-password",
+    "TokenAuthEnabled": true,
+    "ValidTokens": ["your-secret-token"],
+    "Port": 50051
+  }
+}
+```
+
+Clients must send an `Authorization: Bearer <token>` header with every gRPC call.
+
+> ⚠️ **Warning**: Insecure mode should only be used for local development. Production deployments should use HTTPS with token authentication.
 
 ## Logging
 
@@ -158,3 +254,4 @@ Logs are written to Windows Event Viewer under the **Application** log.
 - Check Windows Event Log for startup errors
 - Ensure port **50051** is not in use
 - Run as Administrator for UI Automation access
+- If HTTPS is enabled, verify the certificate file exists at the configured path

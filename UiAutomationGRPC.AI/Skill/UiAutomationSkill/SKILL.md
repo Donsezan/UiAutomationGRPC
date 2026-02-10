@@ -9,8 +9,57 @@ This skill enables you to control Windows desktop applications through a gRPC-ba
 
 ## Prerequisites
 
-- **UiAutomationGRPC.Server** running on `localhost:50051`
+- **UiAutomationGRPC.Server** running (default: `localhost:50051`)
 - **grpccurl** installed (for direct gRPC calls)
+
+## Security Configuration
+
+The server supports two security modes. You must configure `grpccurl` accordingly.
+
+### Insecure Mode (Development/Testing)
+
+When the server is running with `Security.Enabled: false` (default for development):
+
+```bash
+# Use -plaintext flag for HTTP connections
+grpccurl -plaintext -d '{"app_name": "calc"}' localhost:50051 UiAutomation.UiAutomationService/GetAppStructure
+```
+
+### Secure Mode (Production)
+
+When the server is running with `Security.Enabled: true`:
+
+```bash
+# Use HTTPS (no -plaintext flag) + TLS certificate verification
+grpccurl -cacert server.crt -d '{"app_name": "calc"}' localhost:50051 UiAutomation.UiAutomationService/GetAppStructure
+
+# Or skip certificate verification (not recommended for production)
+grpccurl -insecure -d '{"app_name": "calc"}' localhost:50051 UiAutomation.UiAutomationService/GetAppStructure
+```
+
+### Token Authentication
+
+When the server has `Security.TokenAuthEnabled: true`, include the authorization header:
+
+```bash
+# Add -H for Authorization header with Bearer token
+grpccurl -plaintext \
+  -H "Authorization: Bearer YOUR_SECRET_TOKEN" \
+  -d '{"app_name": "calc"}' \
+  localhost:50051 UiAutomation.UiAutomationService/GetAppStructure
+```
+
+**Combined Secure + Token Auth:**
+```bash
+grpccurl -insecure \
+  -H "Authorization: Bearer YOUR_SECRET_TOKEN" \
+  -d '{"app_name": "calc"}' \
+  localhost:50051 UiAutomation.UiAutomationService/GetAppStructure
+```
+
+> **Note:** If you receive `Unauthenticated` errors, verify:
+> 1. The token matches one in the server's `Security.ValidTokens` array
+> 2. The header format is exactly `Authorization: Bearer <token>`
 
 ## The Loop: See → Think → Act
 
@@ -125,3 +174,7 @@ grpccurl -plaintext -d '{"runtime_id": "42,zzz", "action": 9}' localhost:50051 U
 | Element not found | UniqIds are runtime-specific; re-fetch structure |
 | Access denied | Run server with Admin privileges |
 | Server unreachable | Verify `UiAutomationGRPC.Server` is running on 50051 |
+| SSL connection error | Server uses HTTP; add `-plaintext` flag to grpccurl |
+| Certificate error | Use `-insecure` flag or provide valid `-cacert` |
+| `Unauthenticated` | Token auth enabled; add `-H "Authorization: Bearer TOKEN"` |
+| `Invalid token` | Verify token is in server's `Security.ValidTokens` list |

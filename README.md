@@ -110,7 +110,7 @@ Default endpoint: `localhost:50051`
 ```csharp
 using UiAutomationGRPC.Library;
 
-await using var driver = new UiAutomationDriver("http://127.0.0.1:50051");
+await using var driver = new UiAutomationDriver("http://127.0.0.1:50051", insecureMode: true);
 
 // Open an application
 var (success, message, processId) = await driver.OpenAppAsync("calc");
@@ -145,9 +145,32 @@ The LLM can then use the "See → Think → Act" loop:
 2. Analyze and decide on the next action
 3. `perform_action_with_structure` - Act and get updated state
 
+## Security
+
+The server supports three security modes, configured via `appsettings.json`:
+
+| Mode | Encryption | Authentication | Use Case |
+|------|-----------|----------------|----------|
+| **Insecure** (default) | ❌ HTTP | ❌ None | Local development |
+| **HTTPS** | ✅ TLS | ❌ None | Encrypted communication |
+| **HTTPS + Token** | ✅ TLS | ✅ Bearer token | Production |
+
+Clients (Library and MCP) must match the server's security mode:
+
+```csharp
+// Insecure mode (development)
+await using var driver = new UiAutomationDriver("http://127.0.0.1:50051", insecureMode: true);
+
+// HTTPS + token authentication (production)
+await using var driver = new UiAutomationDriver("https://127.0.0.1:50051", authToken: "your-token");
+```
+
+> See [Server README](./UiAutomationGRPC.Server/README.md#security) for full configuration details.
+
 ## Documentation
 
-- [Server README](./UiAutomationGRPC.Server/README.md) - Detailed API and approaches
+- [Server README](./UiAutomationGRPC.Server/README.md) - Detailed API, security, and configuration
 - [Library README](./UiAutomationGRPC.Library/README.md) - SDK usage guide
-- [MCP README](./UiAutomationGRPC.AI/MCP/README.md) - AI integration setup
+- [AI README](./UiAutomationGRPC.AI/README.md) - AI/LLM integration overview
+- [MCP README](./UiAutomationGRPC.AI/MCP/README.md) - MCP server setup
 - [Client README](./UiAutomationGRPC.Client/README.md) - Example walkthrough

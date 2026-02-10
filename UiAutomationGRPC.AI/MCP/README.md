@@ -1,6 +1,6 @@
-# UiAutomationGRPC.LLM (MCP Server)
+# UiAutomationGRPC.AI.MCP
 
-A C# MCP (Model Context Protocol) server that bridges LLMs (like Claude/Antigravity) with `UiAutomationGRPC.Server` for UI automation.
+A C# MCP (Model Context Protocol) server that bridges LLMs (like Claude/Antigravity) with `UiAutomationGRPC.Server` for Windows UI automation.
 
 Connects via gRPC (default: `http://localhost:50051`) and exposes UI automation capabilities as MCP Tools.
 
@@ -8,8 +8,8 @@ Connects via gRPC (default: `http://localhost:50051`) and exposes UI automation 
 
 ### `open_app`
 Launches an application.
-- **app_name**: Path to executable.
-- **arguments**: Command line arguments.
+- **app_name**: Path to executable or app name (e.g., `calc`, `notepad`).
+- **arguments**: Optional command line arguments.
 
 ### `get_app_structure`
 Retrieves the full UI structure of an application as a JSON tree.
@@ -20,7 +20,7 @@ Retrieves the full UI structure of an application as a JSON tree.
 ### `perform_action`
 Performs an action on a UI element.
 - **runtime_id**: The unique ID of the element (from `get_app_structure`).
-- **action**: The action to perform (e.g., `INVOKE`, `CLICK`, `SET_VALUE`, `EXPAND_COLLAPSE`).
+- **action**: The action to perform (e.g., `INVOKE`, `LEFT_CLICK`, `SET_VALUE`, `EXPAND_COLLAPSE`).
 - **arguments**: Optional list of arguments (e.g., text for `SET_VALUE`).
 
 ### `perform_action_with_structure`
@@ -34,7 +34,7 @@ Closes an application by Process ID.
 - **process_id**: The Process ID to terminate.
 
 ### `take_screenshot`
-Takes a screenshot of the application window or a specific element. Saves the image to a temp folder and returns the file path (so the LLM can access the image file).
+Takes a screenshot of the application window or a specific element. Saves the image to a temp folder and returns the file path.
 - **mode**: `element` or `window`.
 - **runtime_id**: Required for `element` mode, optional for `window` mode.
 - **process_id**: Optional, used for `window` mode if `runtime_id` is not provided.
@@ -61,4 +61,28 @@ Or configure your MCP client (like Claude Desktop) to run:
 
 ## Configuration
 
-The server currently hardcodes the gRPC address to `http://localhost:50051`. Modify `Program.cs` to change this if needed.
+Configure the MCP server using environment variables:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `UIAUTOMATION_SERVER_ADDRESS` | gRPC server address | `http://localhost:50051` |
+| `UIAUTOMATION_AUTH_TOKEN` | Bearer token for authentication (if server has token auth enabled) | *(none)* |
+| `UIAUTOMATION_INSECURE_MODE` | Set to `true` to use HTTP instead of HTTPS | `false` |
+
+### Security Modes
+
+**Secure Mode (Default)**
+```powershell
+$env:UIAUTOMATION_SERVER_ADDRESS = "https://localhost:50051"
+$env:UIAUTOMATION_AUTH_TOKEN = "your-secret-token"
+dotnet run
+```
+
+**Insecure Mode (Development Only)**
+```powershell
+$env:UIAUTOMATION_SERVER_ADDRESS = "http://localhost:50051"
+$env:UIAUTOMATION_INSECURE_MODE = "true"
+dotnet run
+```
+
+> ⚠️ **Warning**: Insecure mode should only be used for development/testing. Production deployments should use HTTPS with token authentication.

@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace UiAutomationGRPC.Library.Selectors
+﻿namespace UiAutomationGRPC.Library.Selectors
 {
     /// <summary>
     /// Base class for selectors, holding the list of selector models.

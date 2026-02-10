@@ -1,7 +1,4 @@
-﻿using System.Threading;
-using System.Windows.Forms;
-
-namespace UiAutomationGRPC.Server.Helpers
+﻿namespace UiAutomationGRPC.Server.Helpers
 {
     /// <summary>
     /// Provides virtual keyboard operations for UI automation.

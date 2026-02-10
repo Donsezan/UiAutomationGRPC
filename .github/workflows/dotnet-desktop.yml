@@ -23,6 +23,7 @@ jobs:
       Server_Project_Path: UiAutomationGRPC.Server\UiAutomationGRPC.Server.csproj
       Client_Project_Path: UiAutomationGRPC.Client\UiAutomationGRPC.Client.csproj
       Library_Project_Path: UiAutomationGRPC.Library\UiAutomationGRPC.Library.csproj
+      MCP_Project_Path: UiAutomationGRPC.AI\MCP\UiAutomationGRPC.LLM.csproj
 
     steps:
     - name: Checkout
@@ -38,7 +39,7 @@ jobs:
     - name: Setup MSBuild.exe
       uses: microsoft/setup-msbuild@v2
 
-    # --- Existing builds ---
+    # --- Restore all projects ---
 
     - name: Restore Server
       run: dotnet restore ${{ env.Server_Project_Path }}
@@ -49,6 +50,11 @@ jobs:
     - name: Restore Library
       run: dotnet restore ${{ env.Library_Project_Path }}
 
+    - name: Restore MCP
+      run: dotnet restore ${{ env.MCP_Project_Path }}
+
+    # --- Build all projects ---
+
     - name: Build Server
       run: dotnet build ${{ env.Server_Project_Path }} --configuration ${{ matrix.configuration }} --no-restore
 
@@ -58,17 +64,34 @@ jobs:
     - name: Build Library
       run: dotnet build ${{ env.Library_Project_Path }} --configuration ${{ matrix.configuration }} --no-restore
 
+    - name: Build MCP
+      run: dotnet build ${{ env.MCP_Project_Path }} --configuration ${{ matrix.configuration }} --no-restore
+
+    # --- Upload artifacts ---
+
     - name: Upload Server Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: Server-${{ matrix.configuration }}
-        path: UiAutomationGRPC.Server\bin\${{ matrix.configuration }}\net472
+        path: UiAutomationGRPC.Server\bin\${{ matrix.configuration }}\net8.0-windows
 
     - name: Upload Client Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: Client-${{ matrix.configuration }}
-        path: UiAutomationGRPC.Client\bin\${{ matrix.configuration }}\net472
+        path: UiAutomationGRPC.Client\bin\${{ matrix.configuration }}\net8.0-windows
+
+    - name: Upload Library Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: Library-${{ matrix.configuration }}
+        path: UiAutomationGRPC.Library\bin\${{ matrix.configuration }}\net8.0
+
+    - name: Upload MCP Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: MCP-${{ matrix.configuration }}
+        path: UiAutomationGRPC.AI\MCP\bin\${{ matrix.configuration }}\net8.0
 
 
   # -----------------------------

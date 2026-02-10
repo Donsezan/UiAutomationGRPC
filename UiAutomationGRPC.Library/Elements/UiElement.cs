@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Drawing;
-using System.Linq;
-using System.Threading;
 using UiAutomationGRPC.Library.Helpers;
 using UiAutomationGRPC.Library.Selectors;
 using Uia = global::UiAutomation;

@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace UiAutomationGRPC.Server.Models
 {
     public class AppNode

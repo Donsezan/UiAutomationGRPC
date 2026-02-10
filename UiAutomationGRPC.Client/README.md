@@ -26,11 +26,20 @@ This project serves as a comprehensive example (Client) of how to use the **UiAu
 The `UiAutomationDriver` is the bridge between your client code and the gRPC server. You initialize it with the server's address.
 
 ```csharp
-using (var driver = new UiAutomationDriver("127.0.0.1:50051"))
+// Development — insecure mode (no HTTPS)
+using (var driver = new UiAutomationDriver("http://127.0.0.1:50051", insecureMode: true))
+{
+    // Use driver to open apps, close apps, or create elements
+}
+
+// Production — with HTTPS and token authentication
+using (var driver = new UiAutomationDriver("https://127.0.0.1:50051", authToken: "your-token"))
 {
     // Use driver to open apps, close apps, or create elements
 }
 ```
+
+> See [Library README](../UiAutomationGRPC.Library/README.md#security-configuration) for full security configuration details.
 
 ### Selectors
 Selectors describe **how** to locate an element in the UI tree. They are lazy descriptions, meaning they don't find the element until you actually perform an action (like Click).
