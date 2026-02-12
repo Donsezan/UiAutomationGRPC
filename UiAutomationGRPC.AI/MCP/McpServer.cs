@@ -96,7 +96,8 @@ namespace UiAutomationGRPC.LLM
                             GetToolDefinition_PerformAction(),
                             GetToolDefinition_PerformActionWithStructure(),
                             GetToolDefinition_CloseApp(),
-                            GetToolDefinition_TakeScreenshot()
+                            GetToolDefinition_TakeScreenshot(),
+                            GetToolDefinition_ClearCache()
                         }
                     }
                 };
@@ -129,6 +130,9 @@ namespace UiAutomationGRPC.LLM
                             break;
                         case "take_screenshot":
                             resultData = await HandleTakeScreenshot(args);
+                            break;
+                        case "clear_cache":
+                            resultData = await HandleClearCache();
                             break;
                         default:
                             throw new Exception($"Unknown tool: {name}");
@@ -382,6 +386,34 @@ namespace UiAutomationGRPC.LLM
             var resp = await _client.CloseAppByProcessIdAsync(req);
 
              var content = new JArray();
+            content.Add(new JObject
+            {
+                ["type"] = "text",
+                ["text"] = JsonConvert.SerializeObject(new { resp.Success, resp.Message })
+            });
+
+            return new JObject { ["content"] = content, ["isError"] = !resp.Success };
+        }
+
+        private JObject GetToolDefinition_ClearCache()
+        {
+            return JObject.FromObject(new
+            {
+                name = "clear_cache",
+                description = "Clears the server-side element cache. Call as a teardown step after closing an application to free memory and prevent stale element references.",
+                inputSchema = new
+                {
+                    type = "object",
+                    properties = new { }
+                }
+            });
+        }
+
+        private async Task<JObject> HandleClearCache()
+        {
+            var resp = await _client.ClearCacheAsync(new ClearCacheRequest());
+
+            var content = new JArray();
             content.Add(new JObject
             {
                 ["type"] = "text",

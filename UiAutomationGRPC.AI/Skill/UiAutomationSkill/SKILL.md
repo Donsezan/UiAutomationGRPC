@@ -165,6 +165,9 @@ grpccurl -plaintext -d '{"runtime_id": "42,zzz", "action": 9}' localhost:50051 U
 | `CloseAppByProcessId` | Close by PID |
 | `SendKeys` | Send keyboard input |
 | `TakeScreenshot` | Capture window/element |
+| `ClearCache` | Clear element cache (teardown after closing app) |
+
+> **Tip:** After closing an application with `CloseApp` or `CloseAppByProcessId`, call `ClearCache` to free memory and prevent stale element references. This is especially important when the server runs for long periods.
 
 ## Troubleshooting
 

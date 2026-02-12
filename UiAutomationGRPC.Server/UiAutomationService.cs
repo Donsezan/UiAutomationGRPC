@@ -69,5 +69,17 @@ namespace UiAutomationGRPC.Server
         // Reflection API
         public override Task<ReflectionResponse> Reflect(ReflectionRequest request, ServerCallContext context)
             => _reflectionHandler.Reflect(request, context);
+
+        // Cache Management
+        public override Task<PerformActionResponse> ClearCache(ClearCacheRequest request, ServerCallContext context)
+        {
+            var count = Helpers.ElementCache.Count;
+            Helpers.ElementCache.Clear();
+            return Task.FromResult(new PerformActionResponse
+            {
+                Success = true,
+                Message = $"Cache cleared. {count} element(s) removed."
+            });
+        }
     }
 }

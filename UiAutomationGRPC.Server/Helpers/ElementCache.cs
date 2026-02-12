@@ -44,5 +44,15 @@ namespace UiAutomationGRPC.Server.Helpers
             TryAdd(runtimeId, element);
             return runtimeId;
         }
+
+        /// <summary>
+        /// Clears all cached elements.
+        /// </summary>
+        public static void Clear() => _cache.Clear();
+
+        /// <summary>
+        /// Number of cached elements.
+        /// </summary>
+        public static int Count => _cache.Count;
     }
 }

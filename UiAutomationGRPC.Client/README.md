@@ -8,7 +8,8 @@ This project serves as a comprehensive example (Client) of how to use the **UiAu
   - Connecting to the server (`UiAutomationDriver`).
   - Opening/Closing applications.
   - Interacting with UI elements (Click, Input).
-  - taking screenshots.
+  - Taking screenshots.
+  - Clearing the element cache (teardown).
 - **Calc/**: A sample implementation of the **Page Object Model**.
   - **Pages/CalcPage.cs**: Represents the Calculator window and usage logic (e.g., specific workflows like `ClickTwo()`).
   - **Pages/CalcPageLocators.cs**: Defines the **Selectors** used to find elements within the Calculator window. This cleanly separates *how to find* elements from *what to do* with them.

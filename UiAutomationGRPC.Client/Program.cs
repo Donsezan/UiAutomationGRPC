@@ -31,6 +31,12 @@ class Program
 
             // 4. Manage App Lifecycle (Close)
             await ManageApplicationLifecycle(driver, processId);
+
+            // 5. Clear Element Cache (Teardown)
+            var (clearSuccess, clearMessage) = await driver.ClearCacheAsync();
+            Console.WriteLine(clearSuccess
+                ? $"Cache cleared: {clearMessage}"
+                : $"Cache clear failed: {clearMessage}");
         }
         catch (Exception ex)
         {

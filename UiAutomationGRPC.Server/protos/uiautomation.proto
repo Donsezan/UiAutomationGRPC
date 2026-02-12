@@ -40,6 +40,9 @@ service UiAutomationService {
   
   // Performs an action and returns the updated application structure
   rpc PerformActionWithStructure (PerformActionRequest) returns (AppStructureResponse);
+
+  // Clears the server-side element cache (teardown / memory management)
+  rpc ClearCache (ClearCacheRequest) returns (PerformActionResponse);
 }
 
 // -- Common --
@@ -232,3 +235,7 @@ message AppStructureResponse {
     bool success = 2;
     string message = 3;
 }
+
+// -- Cache Management --
+
+message ClearCacheRequest {}

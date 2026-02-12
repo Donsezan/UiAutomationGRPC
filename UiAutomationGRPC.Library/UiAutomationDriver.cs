@@ -321,6 +321,22 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
 
     #endregion
 
+    #region Cache Management
+
+    /// <summary>
+    /// Clears the server-side element cache.
+    /// Should be called as a teardown step after closing an application
+    /// to prevent memory leaks and stale element references.
+    /// </summary>
+    /// <returns>A tuple containing success status and message.</returns>
+    public async Task<(bool Success, string Message)> ClearCacheAsync()
+    {
+        var response = await Client.ClearCacheAsync(new ClearCacheRequest());
+        return (response.Success, response.Message);
+    }
+
+    #endregion
+
     #region Disposal
 
     /// <summary>

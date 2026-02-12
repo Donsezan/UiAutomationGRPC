@@ -16,7 +16,7 @@ The tools in this folder bridge the gap between the gRPC server and LLM interfac
 
 - **[MCP](./MCP/)**: A **Model Context Protocol (MCP)** server implementation.
     - Connects to `UiAutomationGRPC.Server` via gRPC (default: `localhost:50051`)
-    - Exposes callable tools to the LLM: `open_app`, `get_app_structure`, `perform_action`, `perform_action_with_structure`, `close_app`, `take_screenshot`
+    - Exposes callable tools to the LLM: `open_app`, `get_app_structure`, `perform_action`, `perform_action_with_structure`, `close_app`, `take_screenshot`, `clear_cache`
     
 - **[Skill](./Skill/)**: Skill definitions (e.g., `SKILL.md`) that teach an LLM how to effectively use the available tools.
 

@@ -108,6 +108,13 @@ var (_, _, updatedJson) = await driver.PerformActionWithStructureAsync(
 await driver.CloseAppByProcessIdAsync(processId);
 ```
 
+### 8. Clear Element Cache (Teardown)
+
+```csharp
+// Clear stale element references after closing an app
+var (success, message) = await driver.ClearCacheAsync();
+```
+
 ## Security Configuration
 
 The `UiAutomationDriver` constructor supports three connection modes:
@@ -148,6 +155,7 @@ await using var driver = new UiAutomationDriver("https://127.0.0.1:50051", authT
 | `ReflectAsync` | Query automation metadata |
 | `GetAppStructureAsync` | Get application structure as JSON |
 | `PerformActionWithStructureAsync` | Perform action and get updated structure |
+| `ClearCacheAsync` | Clear server-side element cache (teardown) |
 
 ### VirtualMouse
 
