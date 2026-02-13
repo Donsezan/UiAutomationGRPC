@@ -77,7 +77,7 @@ The client-side SDK for .NET applications.
 
 Tools for AI/LLM integration:
 
-- **[MCP Server](./UiAutomationGRPC.AI/MCP)**: Model Context Protocol server exposing tools (`open_app`, `get_app_structure`, `perform_action`, `perform_action_with_structure`, `close_app`) for Claude/Antigravity.
+- **[MCP Server](./UiAutomationGRPC.AI/MCP)**: Model Context Protocol server exposing tools (`open_app`, `get_app_structure`, `perform_action`, `perform_action_with_structure`, `close_app`, `clear_cache`) for Claude/Antigravity.
 - **[Skill](./UiAutomationGRPC.AI/Skill)**: Pre-built skill definitions for AI assistants.
 
 ---

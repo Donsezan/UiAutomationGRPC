@@ -19,7 +19,7 @@ namespace UiAutomationGRPC.Server.Handlers
                 return HandleGlobalAction(request);
             }
 
-            if (!ElementCache.TryGet(request.RuntimeId, out var element))
+            if (!ElementCache.TryGetLive(request.RuntimeId, out var element))
             {
                 throw new Grpc.Core.RpcException(new Grpc.Core.Status(Grpc.Core.StatusCode.NotFound, "Element not found in cache."));
             }

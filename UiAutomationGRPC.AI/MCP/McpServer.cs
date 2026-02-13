@@ -96,7 +96,8 @@ namespace UiAutomationGRPC.LLM
                             GetToolDefinition_PerformAction(),
                             GetToolDefinition_PerformActionWithStructure(),
                             GetToolDefinition_CloseApp(),
-                            GetToolDefinition_TakeScreenshot()
+                            GetToolDefinition_TakeScreenshot(),
+                            GetToolDefinition_ClearCache()
                         }
                     }
                 };
@@ -129,6 +130,9 @@ namespace UiAutomationGRPC.LLM
                             break;
                         case "take_screenshot":
                             resultData = await HandleTakeScreenshot(args);
+                            break;
+                        case "clear_cache":
+                            resultData = await HandleClearCache(args);
                             break;
                         default:
                             throw new Exception($"Unknown tool: {name}");
@@ -382,6 +386,51 @@ namespace UiAutomationGRPC.LLM
             var resp = await _client.CloseAppByProcessIdAsync(req);
 
              var content = new JArray();
+            content.Add(new JObject
+            {
+                ["type"] = "text",
+                ["text"] = JsonConvert.SerializeObject(new { resp.Success, resp.Message })
+            });
+
+            return new JObject { ["content"] = content, ["isError"] = !resp.Success };
+        }
+
+        private JObject GetToolDefinition_ClearCache()
+        {
+            return JObject.FromObject(new
+            {
+                name = "clear_cache",
+                description = "Clears the server-side element cache. Call without arguments to clear all, or specify process_id/app_name to clear only that application's cache.",
+                inputSchema = new
+                {
+                    type = "object",
+                    properties = new
+                    {
+                        process_id = new { type = "integer", description = "Optional: clear cache for a specific process ID." },
+                        app_name = new { type = "string", description = "Optional: clear cache by application name (like close_app)." }
+                    }
+                }
+            });
+        }
+
+        private async Task<JObject> HandleClearCache(JObject? args)
+        {
+            var req = new ClearCacheRequest();
+
+            if (args != null)
+            {
+                var appName = args["app_name"]?.ToString();
+                var processId = args["process_id"]?.Value<int>() ?? 0;
+
+                if (!string.IsNullOrEmpty(appName))
+                    req.AppName = appName;
+                else if (processId > 0)
+                    req.ProcessId = processId;
+            }
+
+            var resp = await _client.ClearCacheAsync(req);
+
+            var content = new JArray();
             content.Add(new JObject
             {
                 ["type"] = "text",

@@ -39,6 +39,11 @@ Takes a screenshot of the application window or a specific element. Saves the im
 - **runtime_id**: Required for `element` mode, optional for `window` mode.
 - **process_id**: Optional, used for `window` mode if `runtime_id` is not provided.
 
+### `clear_cache`
+Clears the server-side element cache. Call without arguments to clear all, or scope to a specific application.
+- **process_id**: Optional. Clear cache for a specific process ID.
+- **app_name**: Optional. Clear cache by application name (like `close_app`).
+
 ## Prerequisites
 
 1. **UiAutomationGRPC.Server** must be running on port `50051`.

@@ -40,6 +40,9 @@ service UiAutomationService {
   
   // Performs an action and returns the updated application structure
   rpc PerformActionWithStructure (PerformActionRequest) returns (AppStructureResponse);
+
+  // Clears the server-side element cache (teardown / memory management)
+  rpc ClearCache (ClearCacheRequest) returns (PerformActionResponse);
 }
 
 // -- Common --
@@ -231,4 +234,11 @@ message AppStructureResponse {
     string json_structure = 1;
     bool success = 2;
     string message = 3;
+}
+
+// -- Cache Management --
+
+message ClearCacheRequest {
+    int32 process_id = 1;    // Optional: clear only this process's cache (0 = clear all)
+    string app_name = 2;     // Optional: clear by app name (like CloseApp)
 }

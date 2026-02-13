@@ -157,6 +157,10 @@ namespace UiAutomationGRPC.Server.Handlers
                 if (rootMapElement == null)
                     return Task.FromResult(new AppStructureResponse { Success = false, Message = "Main window element not found." });
                 
+                // Flush stale cache for this process before rebuilding fresh
+                try { ElementCache.ClearByProcess(rootMapElement.Current.ProcessId); }
+                catch (System.Windows.Automation.ElementNotAvailableException) { }
+
                 var rootNode = BuildAppNode(rootMapElement);
                 var json = JsonConvert.SerializeObject(rootNode, Formatting.Indented);
 
@@ -176,12 +180,17 @@ namespace UiAutomationGRPC.Server.Handlers
                 return new AppStructureResponse { Success = false, Message = actionResult.Message };
             }
 
-            if (ElementCache.TryGet(request.RuntimeId, out var element))
+            if (ElementCache.TryGetLive(request.RuntimeId, out var element))
             {
                 var window = ScreenshotHandler.GetTopLevelWindow(element);
                 if (window != null)
                 {
                     await Task.Delay(200);
+
+                    // Flush stale cache for this process before rebuilding fresh
+                    try { ElementCache.ClearByProcess(window.Current.ProcessId); }
+                    catch (System.Windows.Automation.ElementNotAvailableException) { }
+
                     var rootNode = BuildAppNode(window);
                     var json = JsonConvert.SerializeObject(rootNode, Formatting.Indented);
                     return new AppStructureResponse { Success = true, JsonStructure = json, Message = "Action performed and structure updated." };

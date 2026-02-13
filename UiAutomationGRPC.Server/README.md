@@ -114,6 +114,7 @@ Both approaches support these actions via `PerformAction`:
 | `SendKeys` | Send keyboard input to focused element |
 | `TakeScreenshot` | Capture screen or window screenshot |
 | `Reflect` | Advanced: Query UI Automation properties dynamically |
+| `ClearCache` | Clear element cache — all, by process ID, or by app name |
 
 ---
 
