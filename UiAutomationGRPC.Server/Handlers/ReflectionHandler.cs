@@ -46,7 +46,7 @@ namespace UiAutomationGRPC.Server.Handlers
                         break;
 
                     case ReflectionTarget.ElementSupportedPatterns:
-                        if (string.IsNullOrEmpty(request.RuntimeId) || !ElementCache.TryGet(request.RuntimeId, out var elementPatterns))
+                        if (string.IsNullOrEmpty(request.RuntimeId) || !ElementCache.TryGetLive(request.RuntimeId, out var elementPatterns))
                         {
                             response.Success = false;
                             response.Message = "Element not found in cache (provide runtime_id).";
@@ -60,7 +60,7 @@ namespace UiAutomationGRPC.Server.Handlers
                         break;
 
                     case ReflectionTarget.ElementSupportedProperties:
-                        if (string.IsNullOrEmpty(request.RuntimeId) || !ElementCache.TryGet(request.RuntimeId, out var elementProps))
+                        if (string.IsNullOrEmpty(request.RuntimeId) || !ElementCache.TryGetLive(request.RuntimeId, out var elementProps))
                         {
                             response.Success = false;
                             response.Message = "Element not found in cache (provide runtime_id).";

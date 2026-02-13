@@ -325,13 +325,22 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
 
     /// <summary>
     /// Clears the server-side element cache.
-    /// Should be called as a teardown step after closing an application
-    /// to prevent memory leaks and stale element references.
+    /// Call without arguments to clear all cached elements.
+    /// Optionally specify a process ID or app name to clear only that application's cache.
     /// </summary>
+    /// <param name="processId">Optional process ID to clear cache for a specific process.</param>
+    /// <param name="appName">Optional app name to clear cache by name (like CloseApp).</param>
     /// <returns>A tuple containing success status and message.</returns>
-    public async Task<(bool Success, string Message)> ClearCacheAsync()
+    public async Task<(bool Success, string Message)> ClearCacheAsync(int processId = 0, string appName = "")
     {
-        var response = await Client.ClearCacheAsync(new ClearCacheRequest());
+        var request = new ClearCacheRequest();
+
+        if (!string.IsNullOrEmpty(appName))
+            request.AppName = appName;
+        else if (processId > 0)
+            request.ProcessId = processId;
+
+        var response = await Client.ClearCacheAsync(request);
         return (response.Success, response.Message);
     }
 

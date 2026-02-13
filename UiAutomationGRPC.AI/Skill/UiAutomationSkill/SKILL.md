@@ -165,9 +165,9 @@ grpccurl -plaintext -d '{"runtime_id": "42,zzz", "action": 9}' localhost:50051 U
 | `CloseAppByProcessId` | Close by PID |
 | `SendKeys` | Send keyboard input |
 | `TakeScreenshot` | Capture window/element |
-| `ClearCache` | Clear element cache (teardown after closing app) |
+| `ClearCache` | Clear element cache — all, by `process_id`, or by `app_name` |
 
-> **Tip:** After closing an application with `CloseApp` or `CloseAppByProcessId`, call `ClearCache` to free memory and prevent stale element references. This is especially important when the server runs for long periods.
+> **Tip:** The server now validates cached elements on every access and auto-re-finds dead elements. For dynamic UIs (blotters, live data), `GetAppStructure` automatically flushes stale cache before rebuilding. You can also call `ClearCache` with `process_id` or `app_name` to clear only a specific application's cache, or without arguments to clear everything.
 
 ## Troubleshooting
 

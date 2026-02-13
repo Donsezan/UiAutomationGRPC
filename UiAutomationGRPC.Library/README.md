@@ -108,11 +108,17 @@ var (_, _, updatedJson) = await driver.PerformActionWithStructureAsync(
 await driver.CloseAppByProcessIdAsync(processId);
 ```
 
-### 8. Clear Element Cache (Teardown)
+### 8. Clear Element Cache
 
 ```csharp
-// Clear stale element references after closing an app
+// Clear all cached elements
 var (success, message) = await driver.ClearCacheAsync();
+
+// Clear only a specific app's cache by name
+await driver.ClearCacheAsync(appName: "calc");
+
+// Clear by process ID
+await driver.ClearCacheAsync(processId: 12345);
 ```
 
 ## Security Configuration
@@ -155,7 +161,7 @@ await using var driver = new UiAutomationDriver("https://127.0.0.1:50051", authT
 | `ReflectAsync` | Query automation metadata |
 | `GetAppStructureAsync` | Get application structure as JSON |
 | `PerformActionWithStructureAsync` | Perform action and get updated structure |
-| `ClearCacheAsync` | Clear server-side element cache (teardown) |
+| `ClearCacheAsync` | Clear element cache — all, by process ID, or by app name |
 
 ### VirtualMouse
 

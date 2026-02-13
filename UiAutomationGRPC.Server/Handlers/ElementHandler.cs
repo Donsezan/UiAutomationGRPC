@@ -18,7 +18,7 @@ namespace UiAutomationGRPC.Server.Handlers
                 AutomationElement startElement = AutomationElement.RootElement;
                 if (!string.IsNullOrEmpty(request.StartRuntimeId))
                 {
-                    if (!ElementCache.TryGet(request.StartRuntimeId, out startElement))
+                    if (!ElementCache.TryGetLive(request.StartRuntimeId, out startElement))
                     {
                         throw new RpcException(new Status(StatusCode.NotFound, "Start element not found in cache."));
                     }
@@ -54,7 +54,7 @@ namespace UiAutomationGRPC.Server.Handlers
                 AutomationElement root = AutomationElement.RootElement;
                 if (!string.IsNullOrEmpty(request.RuntimeId))
                 {
-                    if (!ElementCache.TryGet(request.RuntimeId, out root))
+                    if (!ElementCache.TryGetLive(request.RuntimeId, out root))
                     {
                         return Task.FromResult(new ElementListResponse { Success = false, Message = "Root element not found in cache." });
                     }
@@ -84,7 +84,7 @@ namespace UiAutomationGRPC.Server.Handlers
 
         public Task<GetPropertyResponse> GetProperty(GetPropertyRequest request, ServerCallContext context)
         {
-            if (!ElementCache.TryGet(request.RuntimeId, out var element))
+            if (!ElementCache.TryGetLive(request.RuntimeId, out var element))
             {
                 throw new RpcException(new Status(StatusCode.NotFound, "Element not found."));
             }

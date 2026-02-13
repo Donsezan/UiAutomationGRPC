@@ -24,7 +24,7 @@ namespace UiAutomationGRPC.Server.Handlers
 
                 if (request.Mode == ScreenshotMode.Element)
                 {
-                    if (string.IsNullOrEmpty(request.RuntimeId) || !ElementCache.TryGet(request.RuntimeId, out targetElement))
+                    if (string.IsNullOrEmpty(request.RuntimeId) || !ElementCache.TryGetLive(request.RuntimeId, out targetElement))
                     {
                         if (string.IsNullOrEmpty(request.RuntimeId))
                         {
@@ -47,7 +47,7 @@ namespace UiAutomationGRPC.Server.Handlers
                 }
                 else if (request.Mode == ScreenshotMode.Window)
                 {
-                    if (!string.IsNullOrEmpty(request.RuntimeId) && ElementCache.TryGet(request.RuntimeId, out targetElement))
+                    if (!string.IsNullOrEmpty(request.RuntimeId) && ElementCache.TryGetLive(request.RuntimeId, out targetElement))
                     {
                         // Traverse up to find the window
                         var windowElement = GetTopLevelWindow(targetElement);

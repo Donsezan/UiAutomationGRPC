@@ -40,8 +40,9 @@ Takes a screenshot of the application window or a specific element. Saves the im
 - **process_id**: Optional, used for `window` mode if `runtime_id` is not provided.
 
 ### `clear_cache`
-Clears the server-side element cache. Call as a teardown step after closing an application to free memory and prevent stale element references.
-- No parameters required.
+Clears the server-side element cache. Call without arguments to clear all, or scope to a specific application.
+- **process_id**: Optional. Clear cache for a specific process ID.
+- **app_name**: Optional. Clear cache by application name (like `close_app`).
 
 ## Prerequisites
 

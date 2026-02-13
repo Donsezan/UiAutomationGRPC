@@ -238,4 +238,7 @@ message AppStructureResponse {
 
 // -- Cache Management --
 
-message ClearCacheRequest {}
+message ClearCacheRequest {
+    int32 process_id = 1;    // Optional: clear only this process's cache (0 = clear all)
+    string app_name = 2;     // Optional: clear by app name (like CloseApp)
+}
