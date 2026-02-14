@@ -160,8 +160,9 @@ namespace UiAutomationGRPC.Server.Helpers
                 var resolved = SearchPath(appName);
                 return resolved;
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Trace.WriteLine($"[AppAccessValidator] ResolveToAbsolutePath failed for '{appName}': {ex.Message}");
                 return null;
             }
         }
@@ -186,7 +187,10 @@ namespace UiAutomationGRPC.Server.Helpers
                 if (!string.IsNullOrWhiteSpace(output) && File.Exists(output.Trim()))
                     return Path.GetFullPath(output.Trim());
             }
-            catch { }
+            catch (Exception ex) 
+            { 
+                System.Diagnostics.Trace.WriteLine($"[AppAccessValidator] SearchPath failed for '{appName}': {ex.Message}");
+            }
             return null;
         }
 

@@ -18,12 +18,14 @@ namespace UiAutomationGRPC.Server
         private readonly ScreenshotHandler _screenshotHandler;
         private readonly AppStructureHandler _structureHandler;
         private readonly ReflectionHandler _reflectionHandler;
+        private readonly ILogger<UiAutomationService> _logger;
 
         public UiAutomationService(ILoggerFactory loggerFactory, AppAccessValidator? appAccessValidator = null)
         {
+            _logger = loggerFactory.CreateLogger<UiAutomationService>();
             _elementHandler = new ElementHandler();
             _actionHandler = new ActionHandler();
-            _appHandler = new AppLifecycleHandler(appAccessValidator);
+            _appHandler = new AppLifecycleHandler(loggerFactory.CreateLogger<AppLifecycleHandler>(), appAccessValidator);
             _screenshotHandler = new ScreenshotHandler();
             _structureHandler = new AppStructureHandler(loggerFactory.CreateLogger<AppStructureHandler>(), _actionHandler);
             _reflectionHandler = new ReflectionHandler();
@@ -78,17 +80,22 @@ namespace UiAutomationGRPC.Server
 
             if (!string.IsNullOrEmpty(request.AppName))
             {
+                _logger.LogInformation("ClearCache requested: scope=ByName, AppName='{AppName}'", request.AppName);
                 removed = Helpers.ElementCache.ClearByName(request.AppName);
             }
             else if (request.ProcessId > 0)
             {
+                _logger.LogInformation("ClearCache requested: scope=ByProcess, PID={ProcessId}", request.ProcessId);
                 removed = Helpers.ElementCache.ClearByProcess(request.ProcessId);
             }
             else
             {
+                _logger.LogInformation("ClearCache requested: scope=All");
                 removed = Helpers.ElementCache.Count;
                 Helpers.ElementCache.Clear();
             }
+
+            _logger.LogInformation("ClearCache completed: {Removed} element(s) removed", removed);
 
             return Task.FromResult(new PerformActionResponse
             {
@@ -98,3 +105,4 @@ namespace UiAutomationGRPC.Server
         }
     }
 }
+

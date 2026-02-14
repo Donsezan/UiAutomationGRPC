@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using System.Windows.Automation;
+using Trace = System.Diagnostics.Trace;
 using PropertyCondition = System.Windows.Automation.PropertyCondition;
 
 namespace UiAutomationGRPC.Server.Helpers
@@ -46,14 +47,17 @@ namespace UiAutomationGRPC.Server.Helpers
             catch (ElementNotAvailableException)
             {
                 // Element is dead — try re-finding by locator
+                Trace.WriteLine($"[ElementCache] Element '{runtimeId}' is stale (PID={cached.ProcessId}, Name='{cached.Name}'). Attempting re-find.");
                 var refound = TryRefind(cached);
                 if (refound != null)
                 {
+                    Trace.WriteLine($"[ElementCache] Re-found element '{runtimeId}' successfully.");
                     cached.Element = refound;
                     element = refound;
                     return true;
                 }
 
+                Trace.WriteLine($"[ElementCache] Failed to re-find element '{runtimeId}'. Removing from cache.");
                 _cache.TryRemove(runtimeId, out _);
                 return false;
             }
@@ -110,9 +114,7 @@ namespace UiAutomationGRPC.Server.Helpers
         {
             if (string.IsNullOrEmpty(appName)) return 0;
 
-            string name = appName;
-            if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                name = Path.GetFileNameWithoutExtension(name);
+            string name = StripExeExtension(appName);
 
             var pids = new HashSet<int>(
                 Process.GetProcessesByName(name).Select(p => p.Id));
@@ -170,10 +172,21 @@ namespace UiAutomationGRPC.Server.Helpers
                 return AutomationElement.RootElement.FindFirst(
                     TreeScope.Descendants, condition);
             }
-            catch
+            catch (Exception ex)
             {
+                Trace.WriteLine($"[ElementCache] TryRefind failed for PID={cached.ProcessId}, Name='{cached.Name}': {ex.Message}");
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Strips .exe extension from a name if present. Shared utility to avoid duplication.
+        /// </summary>
+        public static string StripExeExtension(string name)
+        {
+            if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                return Path.GetFileNameWithoutExtension(name);
+            return name;
         }
     }
 }

@@ -16,9 +16,9 @@ namespace UiAutomationGRPC.Server.Handlers
     {
         public Task<ScreenshotResponse> TakeScreenshot(ScreenshotRequest request, ServerCallContext context)
         {
+            Bitmap bmp = null;
             try
             {
-                Bitmap bmp = null;
                 System.Drawing.Rectangle captureRect = System.Drawing.Rectangle.Empty;
                 AutomationElement targetElement = null;
 
@@ -107,6 +107,10 @@ namespace UiAutomationGRPC.Server.Handlers
             catch (Exception ex)
             {
                 return Task.FromResult(new ScreenshotResponse { Success = false, Message = $"Error taking screenshot: {ex.Message}" });
+            }
+            finally
+            {
+                bmp?.Dispose();
             }
         }
 
