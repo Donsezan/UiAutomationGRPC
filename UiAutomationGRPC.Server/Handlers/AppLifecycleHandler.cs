@@ -10,23 +10,46 @@ namespace UiAutomationGRPC.Server.Handlers
     /// </summary>
     public class AppLifecycleHandler
     {
+        private readonly AppAccessValidator? _validator;
+
+        public AppLifecycleHandler(AppAccessValidator? validator = null)
+        {
+            _validator = validator;
+        }
+
         public Task<OpenAppResponse> OpenApp(AppRequest request, ServerCallContext context)
         {
             try
             {
-                var startInfo = new ProcessStartInfo
+                // Validate against whitelist / blacklist if configured
+                if (_validator != null)
+                {
+                    var (allowed, resolvedPath, reason) = _validator.Validate(request.AppName, request.Arguments);
+                    if (!allowed)
+                        return Task.FromResult(new OpenAppResponse { Success = false, Message = $"Blocked: {reason}" });
+
+                    // Use the resolved absolute path
+                    var startInfo = new ProcessStartInfo
+                    {
+                        FileName = resolvedPath,
+                        Arguments = request.Arguments ?? "",
+                        UseShellExecute = true
+                    };
+                    var process = Process.Start(startInfo);
+                    int pid = process?.Id ?? 0;
+                    return Task.FromResult(new OpenAppResponse { Success = true, Message = "App started", ProcessId = pid });
+                }
+
+                // Fallback: no validator configured
+                var fallbackInfo = new ProcessStartInfo
                 {
                     FileName = request.AppName,
                     Arguments = request.Arguments ?? "",
                     UseShellExecute = true
                 };
-                var process = Process.Start(startInfo);
-                int pid = 0;
-                if (process != null)
-                {
-                    pid = process.Id;
-                }
-                return Task.FromResult(new OpenAppResponse { Success = true, Message = "App started", ProcessId = pid });
+                var fallbackProcess = Process.Start(fallbackInfo);
+                int fallbackPid = fallbackProcess?.Id ?? 0;
+                return Task.FromResult(new OpenAppResponse { Success = true, Message = "App started", ProcessId = fallbackPid });
             }
             catch (Exception ex)
             {

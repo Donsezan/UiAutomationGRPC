@@ -2,6 +2,8 @@
 using System.IO;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
+using UiAutomationGRPC.Server.Helpers;
+using UiAutomationGRPC.Server.Models;
 using UiAutomationGRPC.Server.Services;
 
 namespace UiAutomationGRPC.Server;
@@ -21,6 +23,13 @@ public class Program
         var certPath = builder.Configuration.GetValue<string>("Security:CertificatePath") ?? "";
         var certPassword = builder.Configuration.GetValue<string>("Security:CertificatePassword") ?? "";
         var tokenAuthEnabled = builder.Configuration.GetValue<bool>("Security:TokenAuthEnabled");
+
+        // Bind WhiteList / BlackList application access control
+        var appAccessConfig = new AppAccessConfig();
+        builder.Configuration.GetSection("WhiteList").Bind(appAccessConfig.WhiteList);
+        builder.Configuration.GetSection("BlackList").Bind(appAccessConfig.BlackList);
+        builder.Services.AddSingleton(appAccessConfig);
+        builder.Services.AddSingleton<AppAccessValidator>();
 
         // Configure Kestrel
         builder.WebHost.ConfigureKestrel(options =>

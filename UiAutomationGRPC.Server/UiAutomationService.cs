@@ -2,6 +2,7 @@ using Grpc.Core;
 using Microsoft.Extensions.Logging;
 using UiAutomation;
 using UiAutomationGRPC.Server.Handlers;
+using UiAutomationGRPC.Server.Helpers;
 
 namespace UiAutomationGRPC.Server
 {
@@ -18,11 +19,11 @@ namespace UiAutomationGRPC.Server
         private readonly AppStructureHandler _structureHandler;
         private readonly ReflectionHandler _reflectionHandler;
 
-        public UiAutomationService(ILoggerFactory loggerFactory)
+        public UiAutomationService(ILoggerFactory loggerFactory, AppAccessValidator? appAccessValidator = null)
         {
             _elementHandler = new ElementHandler();
             _actionHandler = new ActionHandler();
-            _appHandler = new AppLifecycleHandler();
+            _appHandler = new AppLifecycleHandler(appAccessValidator);
             _screenshotHandler = new ScreenshotHandler();
             _structureHandler = new AppStructureHandler(loggerFactory.CreateLogger<AppStructureHandler>(), _actionHandler);
             _reflectionHandler = new ReflectionHandler();
