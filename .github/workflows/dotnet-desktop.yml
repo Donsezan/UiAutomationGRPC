@@ -24,6 +24,7 @@ jobs:
       Client_Project_Path: UiAutomationGRPC.Client\UiAutomationGRPC.Client.csproj
       Library_Project_Path: UiAutomationGRPC.Library\UiAutomationGRPC.Library.csproj
       MCP_Project_Path: UiAutomationGRPC.AI\MCP\UiAutomationGRPC.LLM.csproj
+      Test_Project_Path: UiAutomationGRPC.Server.Tests\UiAutomationGRPC.Server.Tests.csproj
 
     steps:
     - name: Checkout
@@ -53,6 +54,9 @@ jobs:
     - name: Restore MCP
       run: dotnet restore ${{ env.MCP_Project_Path }}
 
+    - name: Restore Tests
+      run: dotnet restore ${{ env.Test_Project_Path }}
+
     # --- Build all projects ---
 
     - name: Build Server
@@ -66,6 +70,21 @@ jobs:
 
     - name: Build MCP
       run: dotnet build ${{ env.MCP_Project_Path }} --configuration ${{ matrix.configuration }} --no-restore
+
+    - name: Build Tests
+      run: dotnet build ${{ env.Test_Project_Path }} --configuration ${{ matrix.configuration }} --no-restore
+
+    # --- Run tests ---
+
+    - name: Run NUnit Tests
+      run: dotnet test ${{ env.Test_Project_Path }} --configuration ${{ matrix.configuration }} --no-build --logger trx --results-directory TestResults
+
+    - name: Upload Test Results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: TestResults-${{ matrix.configuration }}
+        path: TestResults
 
     # --- Upload artifacts ---
 
