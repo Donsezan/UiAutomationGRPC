@@ -40,9 +40,7 @@ namespace UiAutomationGRPC.Server.Handlers
                 else if (!string.IsNullOrEmpty(request.AppName))
                 {
                     // Strip .exe if present
-                    string appName = request.AppName;
-                    if (appName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                        appName = Path.GetFileNameWithoutExtension(appName);
+                    string appName = ElementCache.StripExeExtension(request.AppName);
 
                     processes = Process.GetProcessesByName(appName);
                     
@@ -135,9 +133,9 @@ namespace UiAutomationGRPC.Server.Handlers
                 // Strategy 3: Fallback to Window Name search
                 if (rootMapElement == null)
                 {
-                    string nameToSearch = request.AppName;
-                    if (!string.IsNullOrEmpty(nameToSearch) && nameToSearch.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                        nameToSearch = Path.GetFileNameWithoutExtension(nameToSearch);
+                    string nameToSearch = !string.IsNullOrEmpty(request.AppName)
+                        ? ElementCache.StripExeExtension(request.AppName)
+                        : request.AppName;
 
                     try 
                     {
@@ -236,8 +234,9 @@ namespace UiAutomationGRPC.Server.Handlers
 
                 return node;
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Trace.WriteLine($"[AppStructureHandler] BuildAppNode failed for element: {ex.Message}");
                 return null;
             }
         }
@@ -248,9 +247,9 @@ namespace UiAutomationGRPC.Server.Handlers
             {
                 return !HasChildren(element);
             } 
-            catch 
+            catch (Exception ex)
             { 
-                // Element may be stale - assume it's a spacer
+                System.Diagnostics.Trace.WriteLine($"[AppStructureHandler] IsUwpSpacer check failed (assuming spacer): {ex.Message}");
                 return true; 
             }
         }

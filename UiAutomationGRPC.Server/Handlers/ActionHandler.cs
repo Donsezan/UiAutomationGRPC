@@ -167,7 +167,7 @@ namespace UiAutomationGRPC.Server.Handlers
         /// </summary>
         public static void ClickElementAtCenter(AutomationElement element, bool rightClick = false)
         {
-            try { element.SetFocus(); } catch { }
+            try { element.SetFocus(); } catch (Exception ex) { System.Diagnostics.Trace.WriteLine($"[ActionHandler] SetFocus failed (non-fatal): {ex.Message}"); }
 
             if (TryGetClickablePoint(element, out Point pt))
             {
@@ -214,7 +214,7 @@ namespace UiAutomationGRPC.Server.Handlers
                     pt = new Point((int)(rect.X + rect.Width / 2), (int)(rect.Y + rect.Height / 2));
                     return true;
                 }
-            } catch {}
+            } catch (Exception ex) { System.Diagnostics.Trace.WriteLine($"[ActionHandler] BoundingRectangle fallback failed: {ex.Message}"); }
 
             pt = new Point(0, 0);
             return false;
