@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.3.11429.125 d18.3
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UiAutomationGRPC.Server.Tests", "UiAutomationGRPC.Server.Tests.csproj", "{1437639E-EE38-20FB-F3CD-A47B7ED342FB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UiAutomationGRPC.Server", "..\UiAutomationGRPC.Server\UiAutomationGRPC.Server.csproj", "{164DA16E-26EE-EC65-276A-8B4F8588E5C9}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1437639E-EE38-20FB-F3CD-A47B7ED342FB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1437639E-EE38-20FB-F3CD-A47B7ED342FB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1437639E-EE38-20FB-F3CD-A47B7ED342FB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1437639E-EE38-20FB-F3CD-A47B7ED342FB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{164DA16E-26EE-EC65-276A-8B4F8588E5C9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{164DA16E-26EE-EC65-276A-8B4F8588E5C9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{164DA16E-26EE-EC65-276A-8B4F8588E5C9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{164DA16E-26EE-EC65-276A-8B4F8588E5C9}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {50AD0B47-A002-4136-94DF-08F6145C8963}
+	EndGlobalSection
+EndGlobal

@@ -165,7 +165,9 @@ All configuration is done via `appsettings.json`:
     "RequestsPerMinute": 1000,
     "RequestsPerSecond": 100,
     "MaxConcurrentConnections": 50
-  }
+  },
+  "WhiteList": [],
+  "BlackList": []
 }
 ```
 
@@ -188,6 +190,137 @@ All configuration is done via `appsettings.json`:
 | `RateLimiting:RequestsPerMinute` | int | `1000` | Max requests per minute |
 | `RateLimiting:RequestsPerSecond` | int | `100` | Max requests per second |
 | `RateLimiting:MaxConcurrentConnections` | int | `50` | Max concurrent connections |
+
+## App Access Control (WhiteList / BlackList)
+
+The server can restrict which applications `OpenApp` is allowed to launch via WhiteList and BlackList rules in `appsettings.json`. If no lists are configured, all applications are allowed by default.
+
+### Evaluation Logic
+
+```mermaid
+flowchart TD
+    A[OpenApp request] --> B{Path traversal?}
+    B -- Yes --> DENY[Blocked]
+    B -- No --> C[Resolve to absolute path]
+    C --> D{WhiteList non-empty?}
+    D -- Yes --> E{App in WhiteList?}
+    E -- No --> DENY
+    E -- Yes --> F{AllowedArgs defined?}
+    F -- Yes --> G{All args in AllowedArgs?}
+    G -- No --> DENY
+    G -- Yes --> H{Any global restricted arg?}
+    F -- No --> H
+    H -- Yes --> DENY
+    H -- No --> ALLOW[Allowed]
+    D -- No --> I{App in BlackList?}
+    I -- Yes --> J{RestrictedArgs defined?}
+    J -- No --> DENY
+    J -- Yes --> K{Args match RestrictedArgs?}
+    K -- Yes --> DENY
+    K -- No --> H
+    I -- No --> H
+```
+
+**Key behaviours:**
+
+- **Path resolution** — the requested app name is resolved to an absolute path (local file → current directory → system `PATH` via `where.exe`). If it cannot be resolved, the request is denied.
+- **Traversal blocking** — any path containing `..` segments is rejected outright.
+- **WhiteList mode** — when at least one `WhiteList` entry has a non-empty `Path`, *only* those applications are permitted. Everything else is denied.
+- **BlackList mode** — when no WhiteList is present, all apps are permitted *except* those explicitly blacklisted.
+- **Argument filtering** — both WhiteList (`AllowedArgs`) and BlackList (`RestrictedArgs`) support per-app argument control.
+- **Global restricted args** — BlackList entries with an **empty** `Path` apply their `RestrictedArgs` globally to every application.
+
+### Configuration
+
+Add `WhiteList` and/or `BlackList` as top-level arrays in `appsettings.json`:
+
+```json
+{
+  "WhiteList": [
+    {
+      "Path": "C:\\Program Files\\MyApp\\app.exe",
+      "AllowedArgs": ["--safe-flag"]
+    }
+  ],
+  "BlackList": [
+    {
+      "Path": "C:\\Windows\\System32\\cmd.exe",
+      "RestrictedArgs": []
+    },
+    {
+      "Path": "",
+      "RestrictedArgs": ["--admin", "--debug"]
+    }
+  ]
+}
+```
+
+### App Access Settings
+
+#### WhiteList Entry
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Path` | string | Absolute path to the allowed executable |
+| `AllowedArgs` | string[] | If non-empty, only these arguments may be passed. Empty list means any arguments are allowed |
+
+#### BlackList Entry
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Path` | string | Absolute path to the blocked executable. **Empty** = global rule |
+| `RestrictedArgs` | string[] | If non-empty, only these arguments are blocked for the app. Empty list = entire app is blocked |
+
+### Example Scenarios
+
+#### WhiteList-only — permit specific apps
+
+```json
+{
+  "WhiteList": [
+    { "Path": "C:\\Tools\\calculator.exe", "AllowedArgs": [] },
+    { "Path": "C:\\Tools\\editor.exe",     "AllowedArgs": ["--readonly"] }
+  ]
+}
+```
+
+Only `calculator.exe` (any args) and `editor.exe` (only `--readonly`) can be launched.
+
+#### BlackList-only — block specific apps or args
+
+```json
+{
+  "BlackList": [
+    { "Path": "C:\\Windows\\System32\\cmd.exe",        "RestrictedArgs": [] },
+    { "Path": "C:\\Windows\\System32\\powershell.exe",  "RestrictedArgs": ["-ExecutionPolicy"] },
+    { "Path": "",                                       "RestrictedArgs": ["--admin"] }
+  ]
+}
+```
+
+- `cmd.exe` is blocked entirely.
+- `powershell.exe` is allowed except when `-ExecutionPolicy` is passed.
+- The `--admin` argument is blocked for **all** applications.
+
+#### Combined — WhiteList + global BlackList args
+
+```json
+{
+  "WhiteList": [
+    { "Path": "C:\\Tools\\app.exe", "AllowedArgs": [] }
+  ],
+  "BlackList": [
+    { "Path": "", "RestrictedArgs": ["--unsafe"] }
+  ]
+}
+```
+
+Only `app.exe` may launch, and even for this app the `--unsafe` argument is rejected.
+
+> [!CAUTION]
+> Without any WhiteList or BlackList configuration, `OpenApp` can launch **any** executable. For production deployments, always configure at least a WhiteList to restrict allowed applications.
+
+---
 
 ## Security
 
