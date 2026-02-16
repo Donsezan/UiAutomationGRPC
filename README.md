@@ -35,7 +35,7 @@ UiAutomationGRPC gives AI agents **structured vision** into Windows applications
 
 | Agent | Integration | Notes |
 |-------|-------------|-------|
-| **Claude Desktop** (Anthropic) | MCP Server | First-class MCP tool support |
+| **Claude** (Anthropic) | MCP Server / Skill | First-class MCP tool support + pre-built Skill definition |
 | **Google Antigravity** | MCP Server / Skill | MCP tools + pre-built Skill definition |
 | **OpenAI Codex / ChatGPT** | MCP / Programmatic | Via MCP bridge or direct gRPC SDK |
 | **Cursor** | MCP Server | Native MCP client support |
