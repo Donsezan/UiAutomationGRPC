@@ -135,12 +135,15 @@ graph TD
     subgraph SDK
         Library["UiAutomationGRPC.Library<br/>.NET 6+ SDK"]
         MCP["MCP Server<br/>.NET 8"]
+        Skill["Skill<br/>gRPCurl"]
     end
 
     Script --> Library
     LLM --> MCP
+    LLM --> Skill
     Library -->|gRPC| Server["UiAutomationGRPC.Server<br/>.NET Framework 4.7.2"]
     MCP -->|gRPC| Server
+    Skill -->|gRPC| Server
     Server -->|Windows UIA| Target["🖥️ Target Application"]
 
     classDef client fill:#0d548c,stroke:#64ffda,stroke-width:2px,color:#fff;
@@ -148,7 +151,7 @@ graph TD
     classDef server fill:#4c381e,stroke:#64ffda,stroke-width:2px,color:#fff;
 
     class Script,LLM client;
-    class Library,MCP sdk;
+    class Library,MCP,Skill sdk;
     class Server,Target server;
 ```
 
