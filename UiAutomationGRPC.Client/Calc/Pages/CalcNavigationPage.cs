@@ -14,21 +14,19 @@ public class CalcNavigationPaget<TPage> : BasePageObject<TPage> where TPage : Ba
         _driver = driver ?? throw new ArgumentNullException(nameof(driver));
         _previousPage = previousPage;
         _locators = new CalcNavigationPagetLocators(driver);
-        // Optional: Wait for the app to be ready in constructor
-        _locators.ButtonSettings.WaitForElementExist();
     }
 
-    public CalcSettingsPage<TPage> ClickSettings()
-    {
-        _locators.ButtonSettings.Click();
-        return new CalcSettingsPage<TPage>(_driver, _previousPage);
-    }
+    /// <summary>
+    /// Waits for the page to be ready. Call after construction.
+    /// </summary>
+    public Task<CalcNavigationPaget<TPage>> WaitForReady() =>
+        ResolveAsync(async () => { await _locators.ButtonSettings.WaitForElementExistAsync(); return this; });
+
+    public Task<CalcSettingsPage<TPage>> ClickSettings() =>
+        ResolveAsync(async () => { await _locators.ButtonSettings.ClickAsync(); return new CalcSettingsPage<TPage>(_driver, _previousPage); });
     
-    public TPage ClickNavigationButton()
-    {
-        _locators.ButtonNavigation.Click();
-        return _previousPage;
-    }
+    public Task<TPage> ClickNavigationButton() =>
+        ResolveAsync(async () => { await _locators.ButtonNavigation.ClickAsync(); return _previousPage; });
 }
 
 public class CalcNavigationPagetLocators

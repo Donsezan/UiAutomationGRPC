@@ -123,26 +123,64 @@ await driver.ClearCacheAsync(processId: 12345);
 
 ## Security Configuration
 
-The `UiAutomationDriver` constructor supports three connection modes:
+The `UiAutomationDriver` supports three secure connection modes and optional token authentication.
+
+### Connection Modes
 
 ```csharp
-// 1. Default: HTTPS (requires server with Security.Enabled = true)
+// 1. HTTPS with OS-trusted certificate (production default)
 await using var driver = new UiAutomationDriver("https://127.0.0.1:50051");
 
-// 2. Insecure mode: HTTP without encryption (development only)
-await using var driver = new UiAutomationDriver("http://127.0.0.1:50051", insecureMode: true);
+// 2. HTTPS with self-signed certificate (no OS install needed)
+await using var driver = new UiAutomationDriver(
+    "https://127.0.0.1:50051",
+    certificatePath: @"C:\certs\server.pfx",
+    certificatePassword: "cert-password");
 
-// 3. HTTPS + Token authentication (production)
-await using var driver = new UiAutomationDriver("https://127.0.0.1:50051", authToken: "your-secret-token");
+// 3. HTTP without encryption (development only)
+await using var driver = new UiAutomationDriver(
+    "http://127.0.0.1:50051",
+    insecureMode: true);
 ```
+
+### Token Authentication
+
+Token auth can be combined with any HTTPS mode:
+
+```csharp
+await using var driver = new UiAutomationDriver(
+    "https://127.0.0.1:50051",
+    authToken: "your-secret-token",
+    certificatePath: @"C:\certs\server.pfx");
+```
+
+### Diagnostics Logging
+
+Pass an `ILogger<UiAutomationDriver>` to capture security warnings and certificate diagnostics:
+
+```csharp
+await using var driver = new UiAutomationDriver(
+    "https://127.0.0.1:50051",
+    certificatePath: @"C:\certs\server.pfx",
+    logger: loggerFactory.CreateLogger<UiAutomationDriver>());
+```
+
+### Constructor Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `address` | string | `"https://127.0.0.1:50051"` | Server address (http:// or https://) |
-| `authToken` | string? | `null` | Bearer token sent with every gRPC call |
-| `insecureMode` | bool | `false` | Use HTTP instead of HTTPS |
+| `address` | `string` | `"https://127.0.0.1:50051"` | Server address (`http://` or `https://`) |
+| `authToken` | `string?` | `null` | Bearer token sent with every gRPC call |
+| `insecureMode` | `bool` | `false` | Use HTTP instead of HTTPS |
+| `certificatePath` | `string?` | `null` | Path to PFX/PEM cert for trusting self-signed server certs |
+| `certificatePassword` | `string?` | `null` | Password for the certificate file |
+| `logger` | `ILogger?` | `null` | Logger for security warnings and cert diagnostics |
 
-> ⚠️ **Warning**: Insecure mode disables TLS encryption. Use only for local development. See [Server README](../UiAutomationGRPC.Server/README.md#security) for server-side security configuration.
+> [!WARNING]
+> Insecure mode disables TLS encryption. Use only for local development. See [Server README](../UiAutomationGRPC.Server/README.md#security) for server-side security configuration.
+
+> [!NOTE]
+> When `certificatePath` is provided, the driver validates the server certificate by **thumbprint pinning** — only the exact cert you specify is trusted. OS-trusted certificates are always accepted regardless of this setting.
 
 ## API Reference
 

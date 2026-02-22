@@ -10,64 +10,52 @@ public class CalcPage : BasePageObject<CalcPage>
     
     public CalcPage(UiAutomationDriver driver) : base(driver)
     {
-        // Optional: Wait for the app to be ready in constructor
         _driver = driver;
         _locators = new CalcPageLocators(driver);
-        _locators.ResultText.WaitForElementExist();
     }
+
+    /// <summary>
+    /// Waits for the page to be ready. Call after construction.
+    /// </summary>
+    public Task<CalcPage> WaitForReady() =>
+        ResolveAsync(async () => { await _locators.ResultText.WaitForElementExistAsync(); return this; });
 
     public CalcPage ClickTwo()
     {
-        _locators.ButtonTwo.Click();
+        Enqueue(() => _locators.ButtonTwo.ClickAsync());
         return this;
     }
 
     public CalcPage ClickPlus()
     {
-        _locators.ButtonPlus.Click();
+        Enqueue(() => _locators.ButtonPlus.ClickAsync());
         return this;
     }
 
     public CalcPage ClickEqual()
     {
-        _locators.ButtonEqual.Click();
+        Enqueue(() => _locators.ButtonEqual.ClickAsync());
         return this;
     }
 
-    public string GetResult()
-    {
-        return _locators.ResultText.Name();
-    }
+    public Task<string> GetResult() =>
+        ResolveAsync(() => _locators.ResultText.NameAsync());
 
-    public CalcNavigationPaget<CalcPage> ClickNavigationButton()
-    {
-        _locators.ResultText.Name();
-        return new CalcNavigationPaget<CalcPage>(_driver, this);
-    }
+    public Task<CalcNavigationPaget<CalcPage>> ClickNavigationButton() =>
+        ResolveAsync(async () => { await _locators.ResultText.NameAsync(); return new CalcNavigationPaget<CalcPage>(_driver, this); });
 
     public CalcPage ClickResultText()
     {
-        _locators.ResultText.Click();
+        Enqueue(() => _locators.ResultText.ClickAsync());
         return this;
     }
 
     /// <summary>
-    /// Sends a key using the VirtualKeyboard (async).
-    /// For the fluent sync pattern, this returns immediately after queuing.
+    /// Sends a key using VirtualKeyboard.
     /// </summary>
     public CalcPage SendKey(string key)
     {
-        // Fire and forget for fluent pattern - use SendKeyAsync directly for proper async handling
-        _ = Keyboard.SendKeyAsync(key);
-        return this;
-    }
-
-    /// <summary>
-    /// Sends a key asynchronously using VirtualKeyboard.
-    /// </summary>
-    public async Task<CalcPage> SendKeyAsync(string key)
-    {
-        await Keyboard.SendKeyAsync(key);
+        Enqueue(() => Keyboard.SendKeyAsync(key));
         return this;
     }
 }

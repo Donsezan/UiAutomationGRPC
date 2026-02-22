@@ -1,6 +1,9 @@
 using Grpc.Net.Client;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
+using Microsoft.Extensions.Logging;
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
 using UiAutomation;
 
 namespace UiAutomationGRPC.Library;
@@ -15,6 +18,7 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     private bool _disposed;
     private readonly bool _insecureMode;
     private readonly string? _authToken;
+    private readonly ILogger<UiAutomationDriver>? _logger;
 
     /// <summary>
     /// Internal gRPC client.
@@ -27,20 +31,26 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// <param name="address">The address of the gRPC server. Defaults to secure HTTPS.</param>
     /// <param name="authToken">Optional authentication token for secure connections.</param>
     /// <param name="insecureMode">Set to true to use HTTP (insecure) connection.</param>
-    public UiAutomationDriver(string address = "https://127.0.0.1:50051", string? authToken = null, bool insecureMode = false)
+    /// <param name="certificatePath">Optional path to a PFX/PEM certificate file for trusting self-signed server certificates without OS-level installation.</param>
+    /// <param name="certificatePassword">Optional password for the certificate file.</param>
+    /// <param name="logger">Optional logger for diagnostics. When null, warnings are silently omitted.</param>
+    public UiAutomationDriver(
+        string address = "https://127.0.0.1:50051",
+        string? authToken = null,
+        bool insecureMode = false,
+        string? certificatePath = null,
+        string? certificatePassword = null,
+        ILogger<UiAutomationDriver>? logger = null)
     {
         _insecureMode = insecureMode;
         _authToken = authToken;
+        _logger = logger;
 
-        // Show warning for insecure mode
         if (_insecureMode)
         {
-            Console.ForegroundColor = ConsoleColor.Yellow;
-            Console.WriteLine("╔════════════════════════════════════════════════════════════════╗");
-            Console.WriteLine("║  ⚠️  WARNING: INSECURE MODE - CONNECTION IS NOT ENCRYPTED  ⚠️   ║");
-            Console.WriteLine("║  This mode should only be used for development/testing.       ║");
-            Console.WriteLine("╚════════════════════════════════════════════════════════════════╝");
-            Console.ResetColor();
+            _logger?.LogWarning(
+                "INSECURE MODE: gRPC connection is NOT encrypted. " +
+                "This mode should only be used for development/testing.");
 
             // For insecure connections, ensure address uses http
             if (address.StartsWith("https://"))
@@ -58,16 +68,20 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
         }
 
         // Configure channel options
-        var channelOptions = new GrpcChannelOptions();
-
-        if (_insecureMode)
+        var handler = new SocketsHttpHandler
         {
-            // Allow HTTP/2 without TLS for development
-            channelOptions.HttpHandler = new SocketsHttpHandler
-            {
-                EnableMultipleHttp2Connections = true
-            };
+            EnableMultipleHttp2Connections = true
+        };
+
+        if (!_insecureMode && !string.IsNullOrEmpty(certificatePath))
+        {
+            ConfigureCertificateTrust(handler, certificatePath, certificatePassword);
         }
+
+        var channelOptions = new GrpcChannelOptions
+        {
+            HttpHandler = handler
+        };
 
         _channel = GrpcChannel.ForAddress(address, channelOptions);
 
@@ -85,6 +99,53 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
         {
             Client = new UiAutomationService.UiAutomationServiceClient(_channel);
         }
+    }
+
+    /// <summary>
+    /// Configures the HTTP handler to trust a specific certificate for self-signed cert scenarios.
+    /// Only the provided certificate is trusted — all other untrusted certs are rejected.
+    /// </summary>
+    private void ConfigureCertificateTrust(SocketsHttpHandler handler, string certificatePath, string? certificatePassword)
+    {
+        if (!File.Exists(certificatePath))
+        {
+            throw new FileNotFoundException(
+                $"Certificate file not found: '{certificatePath}'. " +
+                "Provide a valid path to the server's PFX or PEM certificate.",
+                certificatePath);
+        }
+
+        var trustedCert = new X509Certificate2(certificatePath, certificatePassword ?? "");
+        _logger?.LogInformation("Loaded trusted certificate: Subject={Subject}, Thumbprint={Thumbprint}",
+            trustedCert.Subject, trustedCert.Thumbprint);
+
+        handler.SslOptions = new SslClientAuthenticationOptions
+        {
+            RemoteCertificateValidationCallback = (_, serverCert, _, sslPolicyErrors) =>
+            {
+                // If the cert is already trusted at OS level, accept it
+                if (sslPolicyErrors == SslPolicyErrors.None)
+                    return true;
+
+                // Otherwise, validate that the server cert matches our pinned cert
+                if (serverCert is null)
+                    return false;
+
+                bool thumbprintMatch = string.Equals(
+                    serverCert.GetCertHashString(),
+                    trustedCert.Thumbprint,
+                    StringComparison.OrdinalIgnoreCase);
+
+                if (!thumbprintMatch)
+                {
+                    _logger?.LogWarning(
+                        "Certificate thumbprint mismatch. Expected={Expected}, Received={Received}",
+                        trustedCert.Thumbprint, serverCert.GetCertHashString());
+                }
+
+                return thumbprintMatch;
+            }
+        };
     }
 
     #region App Management
@@ -367,8 +428,8 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
         if (_disposed) return;
         _disposed = true;
 
+        await _channel.ShutdownAsync();
         _channel.Dispose();
-        await Task.CompletedTask;
     }
 
     #endregion

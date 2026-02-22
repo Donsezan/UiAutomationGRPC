@@ -12,24 +12,33 @@ namespace UiAutomationGRPC.Library.Helpers
         /// </summary>
         /// <param name="element">The UI element.</param>
         /// <param name="log">The log message.</param>
-        public static void WriteLog(IAutomationElement element, string log)
+        public static async Task WriteLogAsync(IAutomationElement element, string log)
         {
             Console.WriteLine("Step: " + DataHelper.GetCurrentMethodName());
-            if (element.Name() != null)
+            var name = await element.NameAsync();
+            if (name != null)
             {
-                Console.WriteLine("{0} {1}", log, element.Name());
-            }
-            else if (element.AutomationId() != null)
-            {
-                Console.WriteLine("{0} {1}", log, element.AutomationId());
-            }
-            else if (element.ClassName() != null)
-            {
-                Console.WriteLine("{0}  {1}", log, element.ClassName());
+                Console.WriteLine("{0} {1}", log, name);
             }
             else
             {
-                Console.WriteLine("{0}" + log + " No any name");
+                var automationId = await element.AutomationIdAsync();
+                if (automationId != null)
+                {
+                    Console.WriteLine("{0} {1}", log, automationId);
+                }
+                else
+                {
+                    var className = await element.ClassNameAsync();
+                    if (className != null)
+                    {
+                        Console.WriteLine("{0}  {1}", log, className);
+                    }
+                    else
+                    {
+                        Console.WriteLine("{0}" + log + " No any name");
+                    }
+                }
             }
         }
 
