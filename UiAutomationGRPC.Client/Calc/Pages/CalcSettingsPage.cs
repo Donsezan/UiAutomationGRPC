@@ -12,15 +12,16 @@ public class CalcSettingsPage<TPage> : BasePageObject<TPage> where TPage : BaseP
     {
         _driver = driver ?? throw new ArgumentNullException(nameof(driver));
         _locators = new CalcSettingsPageLocators(driver);
-        // Optional: Wait for the app to be ready in constructor
-        _locators.BackButton.WaitForElementExist();
     }
 
-    public CalcPage ClickBack()
-    {
-        _locators.BackButton.Click();
-        return new CalcPage(_driver);
-    }
+    /// <summary>
+    /// Waits for the page to be ready. Call after construction.
+    /// </summary>
+    public Task<CalcSettingsPage<TPage>> WaitForReady() =>
+        ResolveAsync(async () => { await _locators.BackButton.WaitForElementExistAsync(); return this; });
+
+    public Task<CalcPage> ClickBack() =>
+        ResolveAsync(async () => { await _locators.BackButton.ClickAsync(); return new CalcPage(_driver); });
 }
 
 public class CalcSettingsPageLocators

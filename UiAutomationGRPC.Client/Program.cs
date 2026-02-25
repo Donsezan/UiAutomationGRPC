@@ -103,6 +103,7 @@ class Program
         
         // CalcPage internally uses CalcPageLocators where selectors are defined.
         var calcPage = new CalcPage(driver);
+        await calcPage.WaitForReady();
 
         // A. Click Interactions
         try
@@ -114,7 +115,7 @@ class Program
                 .ClickTwo()
                 .ClickEqual();
 
-            var resultName = calcPage.GetResult();
+            var resultName = await calcPage.GetResult();
             Console.WriteLine($"Click Result: {resultName}");
         }
         catch (Exception ex)
@@ -138,7 +139,7 @@ class Program
 
             await Task.Delay(1000); // Wait for calculation
 
-            var resultName = calcPage.GetResult();
+            var resultName = await calcPage.GetResult();
             Console.WriteLine($"Keyboard Result Name: {resultName}");
         }
         catch (Exception ex)
@@ -165,7 +166,7 @@ class Program
             {
                 try 
                 {
-                    var rect = element.GetRectangle();
+                    var rect = await element.GetRectangleAsync();
                     int centerX = rect.Left + rect.Width / 2;
                     int centerY = rect.Top + rect.Height / 2;
                     
@@ -188,7 +189,7 @@ class Program
             await ClickElementGlobally(locators.ButtonEqual, "Button Equal");
 
             await Task.Delay(1000);
-            var resultName = calcPage.GetResult();
+            var resultName = await calcPage.GetResult();
             Console.WriteLine($"Global Mouse Result: {resultName}");
 
             Console.WriteLine("Mouse interactions completed.");
@@ -211,7 +212,7 @@ class Program
             var btn2 = locators.ButtonTwo;
             
             // Get Runtime ID to identify the specific element for the screenshot service
-            string btnId = btn2.GetRuntimeId();
+            string btnId = await btn2.GetRuntimeIdAsync();
             Console.WriteLine($"Button Two Runtime ID: {btnId}");
             
             // 1. Element Screenshot
