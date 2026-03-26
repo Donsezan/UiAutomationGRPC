@@ -29,13 +29,22 @@ namespace UiAutomationGRPC.Server.Helpers
         private static readonly ConcurrentDictionary<string, CachedElement> _cache = new();
 
         /// <summary>
+        /// Controls whether element caching is active.
+        /// When false, every cache read/write becomes a no-op, forcing callers to
+        /// re-resolve elements from the live UI Automation tree on every request.
+        /// Set once at startup from configuration; thread-safe for reads after init.
+        /// </summary>
+        public static bool Enabled { get; set; } = true;
+
+        /// <summary>
         /// Gets a LIVE element: validates the cached ref, re-finds if stale.
         /// Always returns a live AutomationElement or false.
+        /// Returns false immediately when caching is disabled.
         /// </summary>
         public static bool TryGetLive(string runtimeId, out AutomationElement element)
         {
             element = null;
-            if (!_cache.TryGetValue(runtimeId, out var cached)) return false;
+            if (!Enabled || !_cache.TryGetValue(runtimeId, out var cached)) return false;
 
             // Probe liveness via a fast COM call
             try
@@ -65,10 +74,14 @@ namespace UiAutomationGRPC.Server.Helpers
 
         /// <summary>
         /// Caches an element with its locator info for future re-finding.
+        /// When caching is disabled, the RuntimeId is still derived and returned
+        /// (callers depend on it for response contracts) but the element is not stored.
         /// </summary>
         public static string CacheElement(AutomationElement element)
         {
             string runtimeId = string.Join(",", element.GetRuntimeId());
+            if (!Enabled) return runtimeId;
+
             try
             {
                 var cached = new CachedElement
@@ -91,9 +104,11 @@ namespace UiAutomationGRPC.Server.Helpers
 
         /// <summary>
         /// Removes all cached elements belonging to a specific process.
+        /// Returns 0 immediately when caching is disabled.
         /// </summary>
         public static int ClearByProcess(int processId)
         {
+            if (!Enabled) return 0;
             int removed = 0;
             foreach (var kvp in _cache)
             {
@@ -109,10 +124,11 @@ namespace UiAutomationGRPC.Server.Helpers
         /// <summary>
         /// Removes all cached elements belonging to processes with the given name.
         /// Works like CloseApp — resolves process name to PIDs.
+        /// Returns 0 immediately when caching is disabled.
         /// </summary>
         public static int ClearByName(string appName)
         {
-            if (string.IsNullOrEmpty(appName)) return 0;
+            if (!Enabled || string.IsNullOrEmpty(appName)) return 0;
 
             string name = StripExeExtension(appName);
 
@@ -137,9 +153,9 @@ namespace UiAutomationGRPC.Server.Helpers
         public static void Clear() => _cache.Clear();
 
         /// <summary>
-        /// Number of cached elements.
+        /// Number of cached elements. Returns 0 when caching is disabled.
         /// </summary>
-        public static int Count => _cache.Count;
+        public static int Count => Enabled ? _cache.Count : 0;
 
         /// <summary>
         /// Attempts to re-find a dead element using its stored locator properties.

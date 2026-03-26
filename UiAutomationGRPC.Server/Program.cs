@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using System.IO;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
@@ -23,6 +23,15 @@ public class Program
         var certPath = builder.Configuration.GetValue<string>("Security:CertificatePath") ?? "";
         var certPassword = builder.Configuration.GetValue<string>("Security:CertificatePassword") ?? "";
         var tokenAuthEnabled = builder.Configuration.GetValue<bool>("Security:TokenAuthEnabled");
+
+        // Read feature flags
+        // Cache:Enabled defaults to true — set to false for dynamic apps where fresh tree parsing is required.
+        UiAutomationGRPC.Server.Helpers.ElementCache.Enabled =
+            builder.Configuration.GetValue("Features:Cache:Enabled", defaultValue: true);
+
+        Console.WriteLine(UiAutomationGRPC.Server.Helpers.ElementCache.Enabled
+            ? "[Config] Cache: Enabled"
+            : "[Config] Cache: DISABLED \u2014 every request will parse the live UI tree");
 
         // Bind WhiteList / BlackList application access control
         var appAccessConfig = new AppAccessConfig();
