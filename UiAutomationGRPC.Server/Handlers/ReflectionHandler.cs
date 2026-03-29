@@ -11,6 +11,12 @@ namespace UiAutomationGRPC.Server.Handlers
     /// </summary>
     public class ReflectionHandler
     {
+        private readonly InteractionAccessGuard? _guard;
+
+        public ReflectionHandler(InteractionAccessGuard? guard = null)
+        {
+            _guard = guard;
+        }
         public Task<ReflectionResponse> Reflect(ReflectionRequest request, ServerCallContext context)
         {
             var response = new ReflectionResponse();
@@ -52,6 +58,14 @@ namespace UiAutomationGRPC.Server.Handlers
                             response.Message = "Element not found in cache (provide runtime_id).";
                             return Task.FromResult(response);
                         }
+                        // Validate interaction access for element-specific reflection
+                        var blockedP = InteractionAccessGuard.CheckAccess(_guard, elementPatterns.Current.ProcessId);
+                        if (blockedP != null)
+                        {
+                            response.Success = false;
+                            response.Message = blockedP;
+                            return Task.FromResult(response);
+                        }
                         var supportedPatterns = elementPatterns.GetSupportedPatterns();
                         foreach (var p in supportedPatterns)
                         {
@@ -64,6 +78,14 @@ namespace UiAutomationGRPC.Server.Handlers
                         {
                             response.Success = false;
                             response.Message = "Element not found in cache (provide runtime_id).";
+                            return Task.FromResult(response);
+                        }
+                        // Validate interaction access for element-specific reflection
+                        var blockedPr = InteractionAccessGuard.CheckAccess(_guard, elementProps.Current.ProcessId);
+                        if (blockedPr != null)
+                        {
+                            response.Success = false;
+                            response.Message = blockedPr;
                             return Task.FromResult(response);
                         }
                         var supportedProps = elementProps.GetSupportedProperties();

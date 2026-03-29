@@ -10,6 +10,13 @@ namespace UiAutomationGRPC.Server.Handlers
     /// </summary>
     public class ElementHandler
     {
+        private readonly InteractionAccessGuard? _guard;
+
+        public ElementHandler(InteractionAccessGuard? guard = null)
+        {
+            _guard = guard;
+        }
+
         public Task<ElementResponse> FindElement(FindElementRequest request, ServerCallContext context)
         {
             try
@@ -38,7 +45,16 @@ namespace UiAutomationGRPC.Server.Handlers
                     throw new RpcException(new Status(StatusCode.NotFound, "Element not found matching condition."));
                 }
 
+                // 5. Validate interaction access against the owning process
+                var blocked = InteractionAccessGuard.CheckAccess(_guard, foundElement.Current.ProcessId);
+                if (blocked != null)
+                    throw new RpcException(new Status(StatusCode.PermissionDenied, blocked));
+
                 return Task.FromResult(AutomationMapper.MapToResponse(foundElement));
+            }
+            catch (RpcException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -60,7 +76,15 @@ namespace UiAutomationGRPC.Server.Handlers
                     }
                 }
 
-                // 2. Find All Children using TreeWalker for more reliable traversal
+                // 2. Validate interaction access
+                if (!string.IsNullOrEmpty(request.RuntimeId))
+                {
+                    var blocked = InteractionAccessGuard.CheckAccess(_guard, root.Current.ProcessId);
+                    if (blocked != null)
+                        return Task.FromResult(new ElementListResponse { Success = false, Message = blocked });
+                }
+
+                // 3. Find All Children using TreeWalker for more reliable traversal
                 var children = GetChildElements(root);
                 
                 var response = new ElementListResponse 
@@ -88,6 +112,11 @@ namespace UiAutomationGRPC.Server.Handlers
             {
                 throw new RpcException(new Status(StatusCode.NotFound, "Element not found."));
             }
+
+            // Validate interaction access
+            var blocked = InteractionAccessGuard.CheckAccess(_guard, element.Current.ProcessId);
+            if (blocked != null)
+                return Task.FromResult(new GetPropertyResponse { Success = false, Message = blocked });
 
             try
             {

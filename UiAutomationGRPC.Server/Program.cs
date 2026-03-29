@@ -37,8 +37,28 @@ public class Program
         var appAccessConfig = new AppAccessConfig();
         builder.Configuration.GetSection("WhiteList").Bind(appAccessConfig.WhiteList);
         builder.Configuration.GetSection("BlackList").Bind(appAccessConfig.BlackList);
+        appAccessConfig.RestrictInteractions = builder.Configuration.GetValue("RestrictInteractions", defaultValue: true);
         builder.Services.AddSingleton(appAccessConfig);
         builder.Services.AddSingleton<AppAccessValidator>();
+
+        // Register InteractionAccessGuard — gates element interactions using the same whitelist/blacklist
+        builder.Services.AddSingleton<InteractionAccessGuard>();
+
+        var hasAppWhiteList = appAccessConfig.WhiteList.Any(w => !string.IsNullOrWhiteSpace(w.Path));
+        var hasAppBlackList = appAccessConfig.BlackList.Any(b => !string.IsNullOrWhiteSpace(b.Path));
+        if (hasAppWhiteList || hasAppBlackList)
+        {
+            var listType = hasAppWhiteList ? "WhiteList" : "BlackList";
+            var entryCount = hasAppWhiteList ? appAccessConfig.WhiteList.Count : appAccessConfig.BlackList.Count;
+            Console.WriteLine($"[Config] App Access: {listType} with {entryCount} entries");
+            Console.WriteLine(appAccessConfig.RestrictInteractions
+                ? "[Config] Interaction Restrictions: ACTIVE — element interactions restricted to allowed apps"
+                : "[Config] Interaction Restrictions: DISABLED — only app launch is restricted");
+        }
+        else
+        {
+            Console.WriteLine("[Config] App Access: No restrictions — all applications allowed");
+        }
 
         // Bind SendKeys key restriction configuration
         var keyRestrictionConfig = new KeyRestrictionConfig();

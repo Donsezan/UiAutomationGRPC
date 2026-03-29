@@ -21,10 +21,19 @@ namespace UiAutomationGRPC.Server.Models
 
     /// <summary>
     /// Top-level configuration for application access control.
+    /// Controls both app launch restrictions (via AppAccessValidator) and
+    /// element interaction restrictions (via InteractionAccessGuard).
     /// </summary>
     public class AppAccessConfig
     {
         public List<WhiteListEntry> WhiteList { get; set; } = new();
         public List<BlackListEntry> BlackList { get; set; } = new();
+
+        /// <summary>
+        /// When true and WhiteList/BlackList is configured, element interactions
+        /// are also restricted to processes whose executable matches the list.
+        /// Defaults to true so the whitelist governs both launch and interaction.
+        /// </summary>
+        public bool RestrictInteractions { get; set; } = true;
     }
 }

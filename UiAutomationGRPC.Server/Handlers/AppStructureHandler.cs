@@ -14,16 +14,19 @@ namespace UiAutomationGRPC.Server.Handlers
 {
     /// <summary>
     /// Handles app structure operations (LLM-friendly layer).
+    /// Responsible only for reading UI structure — does NOT launch applications.
     /// </summary>
     public class AppStructureHandler
     {
         private readonly ActionHandler _actionHandler;
         private readonly ILogger<AppStructureHandler> _logger;
+        private readonly InteractionAccessGuard? _guard;
 
-        public AppStructureHandler(ILogger<AppStructureHandler> logger, ActionHandler actionHandler = null)
+        public AppStructureHandler(ILogger<AppStructureHandler> logger, ActionHandler actionHandler = null, InteractionAccessGuard? guard = null)
         {
             _logger = logger;
             _actionHandler = actionHandler ?? new ActionHandler();
+            _guard = guard;
         }
 
         public Task<AppStructureResponse> GetAppStructure(AppStructureRequest request, ServerCallContext context)
@@ -41,92 +44,72 @@ namespace UiAutomationGRPC.Server.Handlers
                 {
                     // Strip .exe if present
                     string appName = ElementCache.StripExeExtension(request.AppName);
-
                     processes = Process.GetProcessesByName(appName);
-                    
-                    if ((processes == null || processes.Length == 0) && !string.IsNullOrEmpty(request.Arguments))
+                }
+
+                // If application is not running, return an error — this method
+                // is responsible only for reading structure, not launching apps.
+                if (processes == null || processes.Length == 0)
+                {
+                    return Task.FromResult(new AppStructureResponse
                     {
-                        var startInfo = new ProcessStartInfo
-                        {
-                            FileName = request.AppName,
-                            Arguments = request.Arguments,
-                            UseShellExecute = true
-                        };
-                        try 
-                        {
-                            var p = Process.Start(startInfo);
-                            Thread.Sleep(2000); 
-                            p.Refresh();
-                            processes = new[] { p };
-                            
-                            if (processes.Length > 0 && !processes[0].HasExited)
-                            {
-                                var refreshed = Process.GetProcessesByName(appName);
-                                if (refreshed.Length > 0) processes = refreshed;
-                            }
-                        }
-                        catch (Exception ex) 
-                        { 
-                            _logger.LogWarning(ex, "Failed to start application '{AppName}'", request.AppName); 
-                        }
-                    }
+                        Success = false,
+                        Message = $"Application is not running: '{request.AppName ?? $"PID {request.ProcessId}"}'. Launch the application first using OpenApp."
+                    });
                 }
 
                 AutomationElement rootMapElement = null;
 
-                if (processes != null && processes.Length > 0)
+                foreach (var p in processes)
                 {
-                    foreach (var p in processes)
+                    try 
                     {
-                        try 
+                        p.Refresh();
+                        if (p.HasExited) continue;
+
+                        // Strategy 1: MainWindowHandle
+                        if (p.MainWindowHandle != IntPtr.Zero)
                         {
-                            p.Refresh();
-                            if (p.HasExited) continue;
-
-                            // Strategy 1: MainWindowHandle
-                            if (p.MainWindowHandle != IntPtr.Zero)
+                            try 
                             {
-                                try 
+                                var candidate = AutomationElement.FromHandle(p.MainWindowHandle);
+                                if (candidate != null) 
                                 {
-                                    var candidate = AutomationElement.FromHandle(p.MainWindowHandle);
-                                    if (candidate != null) 
-                                    {
-                                        if (!IsUwpSpacer(candidate))
-                                        {
-                                            rootMapElement = candidate;
-                                            break;
-                                        }
-                                    }
-                                }
-                                catch (Exception ex) 
-                                { 
-                                    _logger.LogDebug(ex, "Failed to get element from MainWindowHandle for process {ProcessId}", p.Id); 
-                                }
-                            }
-
-                            // Strategy 2: Search by PID
-                            if (rootMapElement == null)
-                            {
-                                var condition = new PropertyCondition(AutomationElement.ProcessIdProperty, p.Id);
-                                try 
-                                {
-                                    var candidate = AutomationElement.RootElement.FindFirst(System.Windows.Automation.TreeScope.Children, condition);
-                                    if (candidate != null)
+                                    if (!IsUwpSpacer(candidate))
                                     {
                                         rootMapElement = candidate;
                                         break;
                                     }
                                 }
-                                catch (Exception ex) 
-                                { 
-                                    _logger.LogDebug(ex, "Failed to find element by ProcessId {ProcessId}", p.Id); 
-                                }
+                            }
+                            catch (Exception ex) 
+                            { 
+                                _logger.LogDebug(ex, "Failed to get element from MainWindowHandle for process {ProcessId}", p.Id); 
                             }
                         }
-                        catch (Exception ex) 
-                        { 
-                            _logger.LogDebug(ex, "Error processing process {ProcessId}", p.Id); 
+
+                        // Strategy 2: Search by PID
+                        if (rootMapElement == null)
+                        {
+                            var condition = new PropertyCondition(AutomationElement.ProcessIdProperty, p.Id);
+                            try 
+                            {
+                                var candidate = AutomationElement.RootElement.FindFirst(System.Windows.Automation.TreeScope.Children, condition);
+                                if (candidate != null)
+                                {
+                                    rootMapElement = candidate;
+                                    break;
+                                }
+                            }
+                            catch (Exception ex) 
+                            { 
+                                _logger.LogDebug(ex, "Failed to find element by ProcessId {ProcessId}", p.Id); 
+                            }
                         }
+                    }
+                    catch (Exception ex) 
+                    { 
+                        _logger.LogDebug(ex, "Error processing process {ProcessId}", p.Id); 
                     }
                 }
 
@@ -154,7 +137,12 @@ namespace UiAutomationGRPC.Server.Handlers
                 
                 if (rootMapElement == null)
                     return Task.FromResult(new AppStructureResponse { Success = false, Message = "Main window element not found." });
-                
+
+                // Validate interaction access against the owning process
+                var blocked = InteractionAccessGuard.CheckAccess(_guard, rootMapElement.Current.ProcessId);
+                if (blocked != null)
+                    return Task.FromResult(new AppStructureResponse { Success = false, Message = blocked });
+
                 // Flush stale cache for this process before rebuilding fresh
                 try { ElementCache.ClearByProcess(rootMapElement.Current.ProcessId); }
                 catch (System.Windows.Automation.ElementNotAvailableException) { }
@@ -261,3 +249,4 @@ namespace UiAutomationGRPC.Server.Handlers
         }
     }
 }
+

@@ -12,10 +12,12 @@ namespace UiAutomationGRPC.Server.Handlers
     public class ActionHandler
     {
         private readonly KeyAccessValidator? _keyValidator;
+        private readonly InteractionAccessGuard? _guard;
 
-        public ActionHandler(KeyAccessValidator? keyValidator = null)
+        public ActionHandler(KeyAccessValidator? keyValidator = null, InteractionAccessGuard? guard = null)
         {
             _keyValidator = keyValidator;
+            _guard = guard;
         }
 
         public Task<PerformActionResponse> PerformAction(PerformActionRequest request, ServerCallContext context)
@@ -30,6 +32,11 @@ namespace UiAutomationGRPC.Server.Handlers
             {
                 throw new Grpc.Core.RpcException(new Grpc.Core.Status(Grpc.Core.StatusCode.NotFound, "Element not found in cache."));
             }
+
+            // Validate interaction access against the owning process
+            var blocked = InteractionAccessGuard.CheckAccess(_guard, element.Current.ProcessId);
+            if (blocked != null)
+                return Task.FromResult(new PerformActionResponse { Success = false, Message = blocked });
 
             try
             {
