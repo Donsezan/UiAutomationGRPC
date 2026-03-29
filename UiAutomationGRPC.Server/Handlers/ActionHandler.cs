@@ -11,6 +11,13 @@ namespace UiAutomationGRPC.Server.Handlers
     /// </summary>
     public class ActionHandler
     {
+        private readonly KeyAccessValidator? _keyValidator;
+
+        public ActionHandler(KeyAccessValidator? keyValidator = null)
+        {
+            _keyValidator = keyValidator;
+        }
+
         public Task<PerformActionResponse> PerformAction(PerformActionRequest request, ServerCallContext context)
         {
             // If RuntimeId is empty, we handle global/mouse actions that don't require an element.
@@ -153,6 +160,13 @@ namespace UiAutomationGRPC.Server.Handlers
         {
             try
             {
+                if (_keyValidator is not null)
+                {
+                    var (allowed, reason) = _keyValidator.Validate(request.Keys);
+                    if (!allowed)
+                        return Task.FromResult(new PerformActionResponse { Success = false, Message = reason });
+                }
+
                 VirtualKeyboard.Send(request.Keys, request.Wait);
                 return Task.FromResult(new PerformActionResponse { Success = true, Message = "Keys sent" });
             }

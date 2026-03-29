@@ -20,11 +20,14 @@ namespace UiAutomationGRPC.Server
         private readonly ReflectionHandler _reflectionHandler;
         private readonly ILogger<UiAutomationService> _logger;
 
-        public UiAutomationService(ILoggerFactory loggerFactory, AppAccessValidator? appAccessValidator = null)
+        public UiAutomationService(
+            ILoggerFactory loggerFactory,
+            AppAccessValidator? appAccessValidator = null,
+            KeyAccessValidator? keyAccessValidator = null)
         {
             _logger = loggerFactory.CreateLogger<UiAutomationService>();
             _elementHandler = new ElementHandler();
-            _actionHandler = new ActionHandler();
+            _actionHandler = new ActionHandler(keyAccessValidator);
             _appHandler = new AppLifecycleHandler(loggerFactory.CreateLogger<AppLifecycleHandler>(), appAccessValidator);
             _screenshotHandler = new ScreenshotHandler();
             _structureHandler = new AppStructureHandler(loggerFactory.CreateLogger<AppStructureHandler>(), _actionHandler);

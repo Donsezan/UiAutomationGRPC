@@ -40,6 +40,21 @@ public class Program
         builder.Services.AddSingleton(appAccessConfig);
         builder.Services.AddSingleton<AppAccessValidator>();
 
+        // Bind SendKeys key restriction configuration
+        var keyRestrictionConfig = new KeyRestrictionConfig();
+        builder.Configuration.GetSection("Features:KeyRestrictions:WhiteList").Bind(keyRestrictionConfig.WhiteList);
+        builder.Configuration.GetSection("Features:KeyRestrictions:BlackList").Bind(keyRestrictionConfig.BlackList);
+        builder.Services.AddSingleton(keyRestrictionConfig);
+        builder.Services.AddSingleton<KeyAccessValidator>();
+
+        var keyWhiteCount = keyRestrictionConfig.WhiteList.Count;
+        var keyBlackCount = keyRestrictionConfig.BlackList.Count;
+        Console.WriteLine(keyWhiteCount > 0
+            ? $"[Config] Key Restrictions: WhiteList with {keyWhiteCount} entries"
+            : keyBlackCount > 0
+                ? $"[Config] Key Restrictions: BlackList with {keyBlackCount} entries"
+                : "[Config] Key Restrictions: None — all keys allowed");
+
         // Configure Kestrel
         builder.WebHost.ConfigureKestrel(options =>
         {

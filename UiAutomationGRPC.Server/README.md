@@ -322,6 +322,130 @@ Only `app.exe` may launch, and even for this app the `--unsafe` argument is reje
 
 ---
 
+## Key Restriction (SendKeys Filter)
+
+The server can restrict which keyboard input the `SendKeys` endpoint is allowed to execute via `KeyRestrictions` WhiteList and BlackList rules in `appsettings.json`. If no lists are configured, all key input is allowed by default.
+
+### Evaluation Logic
+
+```mermaid
+flowchart TD
+    A[SendKeys request] --> B{Empty/null keys?}
+    B -- Yes --> DENY[Blocked]
+    B -- No --> C{KeyWhiteList non-empty?}
+    C -- Yes --> D{Input matches a WhiteList entry?}
+    D -- Yes --> E{Input matches a BlackList entry?}
+    D -- No --> DENY2[Blocked: not in whitelist]
+    E -- Yes --> DENY3[Blocked: restricted key]
+    E -- No --> ALLOW[Allowed]
+    C -- No --> F{Input matches a BlackList entry?}
+    F -- Yes --> DENY3
+    F -- No --> ALLOW
+```
+
+**Key behaviours:**
+
+- **WhiteList mode** — when at least one `KeyWhiteList` entry exists, *only* matching key inputs are permitted. Everything else is denied.
+- **BlackList mode** — when no WhiteList is present, all keys are permitted *except* those matching a BlackList entry.
+- **Combined** — WhiteList + BlackList can be used together. WhiteList is checked first, then BlackList applies as a secondary filter.
+- **BlackList matching** — uses **substring containment** (case-insensitive). Blacklisting `%{F4}` also blocks `abc%{F4}xyz`.
+- **WhiteList matching** — uses **exact match** (case-insensitive), except for the `{PLAINTEXT}` token.
+
+### The `{PLAINTEXT}` Token
+
+When `{PLAINTEXT}` appears in the WhiteList, it matches any input containing **only regular printable characters** — no modifiers (`^`, `%`, `+`, `~`) and no special key codes (`{ENTER}`, `{F4}`, etc.).
+
+This makes it easy to allow regular typing while blocking all modifier combinations:
+
+```json
+"WhiteList": ["{PLAINTEXT}", "{ENTER}", "{TAB}", "{BACKSPACE}"]
+```
+
+### Configuration
+
+Add `KeyRestrictions` under the `Features` section in `appsettings.json`:
+
+```json
+{
+  "Features": {
+    "KeyRestrictions": {
+      "WhiteList": [],
+      "BlackList": []
+    }
+  }
+}
+```
+
+### Key Restriction Settings
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `WhiteList` | string[] | `[]` | When non-empty, only these key patterns are allowed. Supports `{PLAINTEXT}` token |
+| `BlackList` | string[] | `[]` | Key patterns to block. Uses substring containment matching |
+
+### Common Dangerous Key Combinations
+
+| Combination | SendKeys format | Risk |
+|------------|----------------|------|
+| Alt+F4 | `%{F4}` | Closes active window |
+| Ctrl+Esc | `^{ESC}` | Opens Start menu |
+| Alt+Tab | `%{TAB}` | Switches windows |
+| Ctrl+Alt+Delete | `^%{DELETE}` | System security screen |
+| Ctrl+Shift+Esc | `^+{ESC}` | Opens Task Manager |
+| Alt+Space | `% ` | Opens window system menu |
+
+### Example Scenarios
+
+#### WhiteList — allow only regular typing and basic navigation
+
+```json
+{
+  "Features": {
+    "KeyRestrictions": {
+      "WhiteList": ["{PLAINTEXT}", "{ENTER}", "{TAB}", "{BACKSPACE}", "{DELETE}", "{LEFT}", "{RIGHT}", "{UP}", "{DOWN}"],
+      "BlackList": []
+    }
+  }
+}
+```
+
+All modifier combinations (`Ctrl+C`, `Alt+F4`, etc.) are blocked. Only plain text and explicitly listed special keys are allowed.
+
+#### BlackList — block specific dangerous combinations
+
+```json
+{
+  "Features": {
+    "KeyRestrictions": {
+      "WhiteList": [],
+      "BlackList": ["%{F4}", "^{ESC}", "%{TAB}", "^%{DELETE}", "^+{ESC}"]
+    }
+  }
+}
+```
+
+All keys are allowed except the listed dangerous combinations.
+
+#### Combined — allow typing, whitelist some combos, blacklist others
+
+```json
+{
+  "Features": {
+    "KeyRestrictions": {
+      "WhiteList": ["{PLAINTEXT}", "{ENTER}", "^c", "^v", "^a"],
+      "BlackList": []
+    }
+  }
+}
+```
+
+Allows plain text, Enter, and Ctrl+C/V/A. All other modifier combinations are blocked by the whitelist.
+
+> [!CAUTION]
+> Without any KeyRestrictions configuration, `SendKeys` can execute **any** key combination. For production deployments, configure at least a BlackList of dangerous key patterns or a WhiteList to restrict allowed input.
+
+---
+
 ## Security
 
 The server supports three security modes:
