@@ -11,6 +11,15 @@ namespace UiAutomationGRPC.Server.Handlers
     /// </summary>
     public class ActionHandler
     {
+        private readonly KeyAccessValidator? _keyValidator;
+        private readonly InteractionAccessGuard? _guard;
+
+        public ActionHandler(KeyAccessValidator? keyValidator = null, InteractionAccessGuard? guard = null)
+        {
+            _keyValidator = keyValidator;
+            _guard = guard;
+        }
+
         public Task<PerformActionResponse> PerformAction(PerformActionRequest request, ServerCallContext context)
         {
             // If RuntimeId is empty, we handle global/mouse actions that don't require an element.
@@ -23,6 +32,11 @@ namespace UiAutomationGRPC.Server.Handlers
             {
                 throw new Grpc.Core.RpcException(new Grpc.Core.Status(Grpc.Core.StatusCode.NotFound, "Element not found in cache."));
             }
+
+            // Validate interaction access against the owning process
+            var blocked = InteractionAccessGuard.CheckAccess(_guard, element.Current.ProcessId);
+            if (blocked != null)
+                return Task.FromResult(new PerformActionResponse { Success = false, Message = blocked });
 
             try
             {
@@ -153,6 +167,13 @@ namespace UiAutomationGRPC.Server.Handlers
         {
             try
             {
+                if (_keyValidator is not null)
+                {
+                    var (allowed, reason) = _keyValidator.Validate(request.Keys);
+                    if (!allowed)
+                        return Task.FromResult(new PerformActionResponse { Success = false, Message = reason });
+                }
+
                 VirtualKeyboard.Send(request.Keys, request.Wait);
                 return Task.FromResult(new PerformActionResponse { Success = true, Message = "Keys sent" });
             }

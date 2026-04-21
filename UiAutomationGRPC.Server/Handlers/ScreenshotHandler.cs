@@ -14,6 +14,12 @@ namespace UiAutomationGRPC.Server.Handlers
     /// </summary>
     public class ScreenshotHandler
     {
+        private readonly InteractionAccessGuard? _guard;
+
+        public ScreenshotHandler(InteractionAccessGuard? guard = null)
+        {
+            _guard = guard;
+        }
         public Task<ScreenshotResponse> TakeScreenshot(ScreenshotRequest request, ServerCallContext context)
         {
             Bitmap bmp = null;
@@ -41,6 +47,12 @@ namespace UiAutomationGRPC.Server.Handlers
                     {
                         var rect = targetElement.Current.BoundingRectangle;
                         if (rect.Width <= 0 || rect.Height <= 0) throw new Exception("Element has invalid dimensions.");
+
+                        // Validate interaction access before capturing
+                        var blocked = InteractionAccessGuard.CheckAccess(_guard, targetElement.Current.ProcessId);
+                        if (blocked != null)
+                            return Task.FromResult(new ScreenshotResponse { Success = false, Message = blocked });
+
                         captureRect = new System.Drawing.Rectangle((int)rect.X, (int)rect.Y, (int)rect.Width, (int)rect.Height);
                         bmp = CaptureRegion(captureRect);
                     }
@@ -49,6 +61,11 @@ namespace UiAutomationGRPC.Server.Handlers
                 {
                     if (!string.IsNullOrEmpty(request.RuntimeId) && ElementCache.TryGetLive(request.RuntimeId, out targetElement))
                     {
+                        // Validate interaction access before capturing
+                        var blockedW = InteractionAccessGuard.CheckAccess(_guard, targetElement.Current.ProcessId);
+                        if (blockedW != null)
+                            return Task.FromResult(new ScreenshotResponse { Success = false, Message = blockedW });
+
                         // Traverse up to find the window
                         var windowElement = GetTopLevelWindow(targetElement);
                         var wRect = windowElement.Current.BoundingRectangle;

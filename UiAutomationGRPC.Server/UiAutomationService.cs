@@ -20,15 +20,19 @@ namespace UiAutomationGRPC.Server
         private readonly ReflectionHandler _reflectionHandler;
         private readonly ILogger<UiAutomationService> _logger;
 
-        public UiAutomationService(ILoggerFactory loggerFactory, AppAccessValidator? appAccessValidator = null)
+        public UiAutomationService(
+            ILoggerFactory loggerFactory,
+            AppAccessValidator? appAccessValidator = null,
+            KeyAccessValidator? keyAccessValidator = null,
+            InteractionAccessGuard? interactionGuard = null)
         {
             _logger = loggerFactory.CreateLogger<UiAutomationService>();
-            _elementHandler = new ElementHandler();
-            _actionHandler = new ActionHandler();
+            _elementHandler = new ElementHandler(interactionGuard);
+            _actionHandler = new ActionHandler(keyAccessValidator, interactionGuard);
             _appHandler = new AppLifecycleHandler(loggerFactory.CreateLogger<AppLifecycleHandler>(), appAccessValidator);
-            _screenshotHandler = new ScreenshotHandler();
-            _structureHandler = new AppStructureHandler(loggerFactory.CreateLogger<AppStructureHandler>(), _actionHandler);
-            _reflectionHandler = new ReflectionHandler();
+            _screenshotHandler = new ScreenshotHandler(interactionGuard);
+            _structureHandler = new AppStructureHandler(loggerFactory.CreateLogger<AppStructureHandler>(), _actionHandler, interactionGuard);
+            _reflectionHandler = new ReflectionHandler(interactionGuard);
         }
 
         // Element Operations
