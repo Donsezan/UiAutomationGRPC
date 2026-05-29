@@ -201,6 +201,7 @@ message OpenAppResponse {
 message SendKeysRequest {
     string keys = 1;
     bool wait = 2; // default true
+    string runtime_id = 3; // Optional: focus this element before sending (targets a specific control instead of whatever currently has focus)
 }
 
 message ScreenshotRequest {

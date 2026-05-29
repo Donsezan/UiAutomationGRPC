@@ -177,6 +177,28 @@ namespace UiAutomationGRPC.Server.Handlers
                         return new PerformActionResponse { Success = false, Message = reason };
                 }
 
+                // Optional targeting: focus the requested element before sending so keys land on a
+                // specific control rather than whatever happens to hold focus. Without it, SendKeys
+                // posts to the focused window of the server's session (the #3 "no target" problem).
+                if (!string.IsNullOrEmpty(request.RuntimeId))
+                {
+                    if (!ElementCache.TryGetLive(request.RuntimeId, out var target))
+                        return new PerformActionResponse { Success = false, Message = "Element not found in cache." };
+
+                    var blocked = InteractionAccessGuard.CheckAccess(_guard, target.Current.ProcessId);
+                    if (blocked != null)
+                        return new PerformActionResponse { Success = false, Message = blocked };
+
+                    try
+                    {
+                        target.SetFocus();
+                    }
+                    catch (Exception ex)
+                    {
+                        return new PerformActionResponse { Success = false, Message = $"Could not focus target element before sending keys: {ex.Message}" };
+                    }
+                }
+
                 VirtualKeyboard.Send(request.Keys, request.Wait);
                 return new PerformActionResponse { Success = true, Message = "Keys sent" };
             }

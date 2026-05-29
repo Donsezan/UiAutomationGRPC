@@ -238,14 +238,23 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
-    /// Sends keys to the active application.
+    /// Sends keys to the active application, optionally focusing a target element first.
     /// </summary>
     /// <param name="keys">The keys to send.</param>
     /// <param name="wait">Whether to wait for processing.</param>
+    /// <param name="runtimeId">
+    /// Optional RuntimeId of an element to focus before sending. When supplied, the server focuses
+    /// that element first so the keys land on a specific control instead of whatever currently has
+    /// focus. When null/empty, keys go to the currently focused window (legacy behavior).
+    /// </param>
     /// <returns>A tuple containing success status and message.</returns>
-    public async Task<(bool Success, string Message)> SendKeysAsync(string keys, bool wait = true)
+    public async Task<(bool Success, string Message)> SendKeysAsync(string keys, bool wait = true, string? runtimeId = null)
     {
-        var response = await Client.SendKeysAsync(new SendKeysRequest { Keys = keys, Wait = wait });
+        var request = new SendKeysRequest { Keys = keys, Wait = wait };
+        if (!string.IsNullOrEmpty(runtimeId))
+            request.RuntimeId = runtimeId;
+
+        var response = await Client.SendKeysAsync(request);
         return (response.Success, response.Message);
     }
 

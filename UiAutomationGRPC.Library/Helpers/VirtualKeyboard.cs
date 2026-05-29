@@ -36,6 +36,14 @@ public sealed class VirtualKeyboard
         => await _driver.SendKeysAsync(keys, wait);
 
     /// <summary>
+    /// Focuses the element identified by <paramref name="runtimeId"/> and then sends keys to it,
+    /// waiting for processing. Use this to direct input at a specific control rather than whatever
+    /// currently holds focus.
+    /// </summary>
+    public async Task<(bool Success, string Message)> SendToElementAsync(string runtimeId, string keys, bool wait = true)
+        => await _driver.SendKeysAsync(keys, wait, runtimeId);
+
+    /// <summary>
     /// Sends a key with a delay for keyboard readiness.
     /// </summary>
     public async Task<(bool Success, string Message)> SendKeyAsync(string buttonKey)

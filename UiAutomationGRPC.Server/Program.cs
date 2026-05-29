@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
@@ -172,10 +173,61 @@ public class Program
 
         var app = builder.Build();
 
+        // Session 0 / interactive-desktop check. A Windows Service runs in Session 0, which has no
+        // access to the interactive user desktop — UIA queries and synthesized mouse/keyboard input
+        // would silently target an empty/wrong desktop. Only a process in the user's interactive
+        // session can actually drive their apps. We can't fix that from inside the process, so detect
+        // it and warn loudly (Event Log when running as a service, console otherwise).
+        WarnIfNonInteractiveSession(app.Logger);
+
         // Map gRPC service
         app.MapGrpcService<UiAutomationService>();
         app.MapGrpcReflectionService();
 
         app.Run();
+    }
+
+    /// <summary>
+    /// Detects whether the server is running in a non-interactive context (Session 0, the Windows
+    /// Service session) and, if so, emits a hard warning. In Session 0 the process cannot see or
+    /// drive the interactive user desktop, so UIA reads and synthesized input will not reach the
+    /// user's apps. The supported way to run "as a service" is to launch in the user's interactive
+    /// session (e.g. a Scheduled Task triggered at logon, or running under the interactive account).
+    /// </summary>
+    private static void WarnIfNonInteractiveSession(ILogger logger)
+    {
+        int sessionId;
+        try
+        {
+            sessionId = Process.GetCurrentProcess().SessionId;
+        }
+        catch
+        {
+            sessionId = -1; // SessionId unavailable; fall back to UserInteractive alone.
+        }
+
+        // Session 0 is the isolated service session. Environment.UserInteractive is false for a
+        // service host. Either signal means input/UIA will not reach the interactive desktop.
+        var nonInteractive = sessionId == 0 || !Environment.UserInteractive;
+        if (!nonInteractive)
+            return;
+
+        const string warning =
+            "Server is running in a NON-INTERACTIVE session (Session 0 / Windows Service). " +
+            "It CANNOT see or drive the interactive user desktop — UIA queries and synthesized " +
+            "mouse/keyboard input will target an empty/wrong desktop and most automation will " +
+            "silently fail. Run the server in the user's interactive session instead (e.g. a " +
+            "Scheduled Task triggered at logon, or under the interactive user account).";
+
+        logger.LogWarning("{Warning} (SessionId={SessionId}, UserInteractive={UserInteractive})",
+            warning, sessionId, Environment.UserInteractive);
+
+        if (Environment.UserInteractive)
+        {
+            var prev = Console.ForegroundColor;
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"[Session] WARNING: {warning}");
+            Console.ForegroundColor = prev;
+        }
     }
 }
