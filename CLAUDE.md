@@ -23,7 +23,7 @@ There is no top-level solution that contains everything; each project has its ow
 ## Commands
 
 ```powershell
-# Build / run the server (default endpoint http://0.0.0.0:50051)
+# Build / run the server (default endpoint http://127.0.0.1:50051)
 dotnet run --project UiAutomationGRPC.Server
 
 # Run the MCP server (needs the gRPC server already running)
@@ -80,11 +80,9 @@ Configured in `appsettings.json`, wired up in [Program.cs](UiAutomationGRPC.Serv
 2. **`InteractionAccessGuard`** — gates *interactions* with already-running processes using the **same** WhiteList/BlackList (resolves a PID's exe path, caches the decision per PID). This covers element ops (Find/GetChildren/GetProperty/PerformAction/Reflect), `GetAppStructure`, **and process termination** (`CloseApp` / `CloseAppByProcessId` — killing a process is treated as an interaction). Active only when `RestrictInteractions` is true **and** a list is configured. Handlers call `InteractionAccessGuard.CheckAccess(guard, processId)` and bail if it returns non-null. Note the per-PID decision cache never expires, so a recycled Windows PID could in theory inherit a stale decision.
 3. **`KeyAccessValidator`** — gates `SendKeys` input via `Features:KeyRestrictions` WhiteList/BlackList (substring match for blacklist, exact match for whitelist, plus the `{PLAINTEXT}` token).
 
-Transport security: `TokenAuthInterceptor` (Bearer token, added only when `Security:TokenAuthEnabled`) and `AuditInterceptor` (always on) in `Services/`. TLS is gated by the **`Security:Enabled`** flag — when false (the shipped default) Kestrel listens on plain HTTP regardless of any cert; when true it loads the cert from `Security:CertificatePath` / `Security:CertificatePassword` and **exits the process** if the file is missing. The listen port comes from `Security:Port` (default 50051) in both modes. Note: enabling `TokenAuthEnabled` with an empty `Security:ValidTokens` list rejects *every* request (fail-closed, no startup warning).
+Transport security: `TokenAuthInterceptor` (Bearer token, added only when `Security:TokenAuthEnabled`) and `AuditInterceptor` (always on) in `Services/`. TLS is gated by the **`Security:Enabled`** flag — when false (the shipped default) Kestrel listens on plain HTTP regardless of any cert; when true it loads the cert from `Security:CertificatePath` / `Security:CertificatePassword` and **exits the process** if the file is missing. The listen port comes from `Security:Port` (default 50051) in both modes. The server binds to **loopback `127.0.0.1` by default**; set **`Security:AllowRemote=true`** to listen on all interfaces (`0.0.0.0`) — opt-in because the service can launch/kill processes and synthesize input. Note: enabling `TokenAuthEnabled` with an empty `Security:ValidTokens` list rejects *every* request (fail-closed, no startup warning).
 
-> **Config gotcha:** [Program.cs](UiAutomationGRPC.Server/Program.cs) binds the app access lists from **top-level** `WhiteList` / `BlackList` keys and `RestrictInteractions`, *not* from the `Features:AppRestrictions` section that the shipped `appsettings.json` contains. The `Features:AppRestrictions` block is effectively dead config — put app whitelists/blacklists at the top level (as the Server README documents). Key restrictions, however, *are* read from `Features:KeyRestrictions`.
->
-> **Dead config:** the `RateLimiting` block in `appsettings.json` (`RequestsPerMinute`, `MaxConcurrentConnections`, etc.) is **not read anywhere** — no rate limiting is implemented. It is purely aspirational config.
+> **Config gotcha:** [Program.cs](UiAutomationGRPC.Server/Program.cs) binds the app access lists from **top-level** `WhiteList` / `BlackList` keys and `RestrictInteractions` (as the Server README documents). Key restrictions are read from `Features:KeyRestrictions`. (The old dead `Features:AppRestrictions` and `RateLimiting` blocks were removed from `appsettings.json` in Phase 4 — nothing read them.)
 
 ## Client SDK shape
 

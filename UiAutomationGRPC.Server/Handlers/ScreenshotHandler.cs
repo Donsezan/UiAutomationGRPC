@@ -40,7 +40,7 @@ namespace UiAutomationGRPC.Server.Handlers
                         }
                         else
                         {
-                            throw new RpcException(new Status(StatusCode.NotFound, "Element not found or RuntimeId missing for ELEMENT mode."));
+                            return new ScreenshotResponse { Success = false, Message = "Element not found or RuntimeId missing for ELEMENT mode." };
                         }
                     }
                     else
@@ -95,7 +95,7 @@ namespace UiAutomationGRPC.Server.Handlers
                         }
                         else
                         {
-                            throw new RpcException(new Status(StatusCode.NotFound, "Process main window not found."));
+                            return new ScreenshotResponse { Success = false, Message = "Process main window not found." };
                         }
                     }
                     else
@@ -107,7 +107,7 @@ namespace UiAutomationGRPC.Server.Handlers
                 
                 if (bmp == null)
                 {
-                    throw new RpcException(new Status(StatusCode.Internal, "Failed to capture screenshot."));
+                    return new ScreenshotResponse { Success = false, Message = "Failed to capture screenshot." };
                 }
 
                 using (var ms = new MemoryStream())

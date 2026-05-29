@@ -115,6 +115,11 @@ These act at the current cursor position or at absolute coordinates, simulated v
 |--------|-------------|
 | `OpenApp` | Launch an application by path or name (gated by the app WhiteList/BlackList) |
 | `CloseApp` | Terminate all processes matching an app name |
+
+> [!NOTE]
+> For UWP/Store apps (e.g. `calc`), `OpenApp` returns a host/launcher PID rather than the PID that owns the window, so that PID may not work with `GetAppStructure`/`TakeScreenshot` *by PID*. Prefer `GetAppStructure` *by app name* for UWP apps. Classic Win32 apps return the correct PID.
+
+
 | `CloseAppByProcessId` | Terminate a single process by PID |
 | `SendKeys` | Send keyboard input to the focused element (gated by key restrictions) |
 | `TakeScreenshot` | Capture an element or window screenshot |
@@ -131,7 +136,8 @@ These act at the current cursor position or at absolute coordinates, simulated v
 ## Running
 
 ```powershell
-# Console app (default endpoint http://0.0.0.0:50051)
+# Console app (default endpoint http://127.0.0.1:50051 — loopback only)
+# Set Security:AllowRemote=true to listen on all interfaces (0.0.0.0).
 dotnet run --project UiAutomationGRPC.Server
 ```
 
@@ -170,7 +176,8 @@ All configuration is done via `appsettings.json`:
     "CertificatePassword": "",
     "TokenAuthEnabled": false,
     "ValidTokens": [],
-    "Port": 50051
+    "Port": 50051,
+    "AllowRemote": false
   },
   "WhiteList": [],
   "BlackList": []
@@ -187,6 +194,7 @@ All configuration is done via `appsettings.json`:
 | `Security:TokenAuthEnabled` | bool | `false` | Enable Bearer token authentication |
 | `Security:ValidTokens` | string[] | `[]` | List of accepted tokens |
 | `Security:Port` | int | `50051` | gRPC listening port |
+| `Security:AllowRemote` | bool | `false` | Bind to all interfaces (`0.0.0.0`). When `false` (default) the server binds to loopback `127.0.0.1` only — opt-in because the service can launch/kill processes and synthesize input. |
 
 > [!NOTE]
 > Enabling `TokenAuthEnabled` with an empty `ValidTokens` list is fail-closed: **every** request is rejected as `Unauthenticated`. The server logs a warning at startup when this happens.

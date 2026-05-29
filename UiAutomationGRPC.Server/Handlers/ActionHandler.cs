@@ -30,7 +30,7 @@ namespace UiAutomationGRPC.Server.Handlers
 
             if (!ElementCache.TryGetLive(request.RuntimeId, out var element))
             {
-                throw new Grpc.Core.RpcException(new Grpc.Core.Status(Grpc.Core.StatusCode.NotFound, "Element not found in cache."));
+                return new PerformActionResponse { Success = false, Message = "Element not found in cache." };
             }
 
             // Validate interaction access against the owning process

@@ -258,6 +258,10 @@ namespace UiAutomationGRPC.Server.Handlers
             cr.Add(AutomationElement.BoundingRectangleProperty);
             cr.Add(AutomationElement.IsInvokePatternAvailableProperty);
             cr.Add(AutomationElement.IsTogglePatternAvailableProperty);
+            cr.Add(AutomationElement.IsExpandCollapsePatternAvailableProperty);
+            cr.Add(AutomationElement.IsSelectionItemPatternAvailableProperty);
+            cr.Add(AutomationElement.IsValuePatternAvailableProperty);
+            cr.Add(ValuePattern.IsReadOnlyProperty);
             return cr;
         }
 
@@ -292,8 +296,19 @@ namespace UiAutomationGRPC.Server.Handlers
             var controlType = Prop(element, AutomationElement.ControlTypeProperty) as ControlType;
             string controlTypeName = controlType?.ProgrammaticName ?? "";
             int processId = AsInt(Prop(element, AutomationElement.ProcessIdProperty));
+
+            // An element is "clickable" if it exposes any pattern an agent can act on:
+            // Invoke (buttons), Toggle (checkboxes), ExpandCollapse (tree/combo nodes),
+            // SelectionItem (list/tab/radio items), a settable Value (editable fields), or it is a
+            // Hyperlink control. The earlier invoke||toggle-only check missed most of these.
             bool invoke = AsBool(Prop(element, AutomationElement.IsInvokePatternAvailableProperty));
             bool toggle = AsBool(Prop(element, AutomationElement.IsTogglePatternAvailableProperty));
+            bool expandCollapse = AsBool(Prop(element, AutomationElement.IsExpandCollapsePatternAvailableProperty));
+            bool selectionItem = AsBool(Prop(element, AutomationElement.IsSelectionItemPatternAvailableProperty));
+            bool valueSettable = AsBool(Prop(element, AutomationElement.IsValuePatternAvailableProperty))
+                                 && !AsBool(Prop(element, ValuePattern.IsReadOnlyProperty));
+            bool isHyperlink = controlType == ControlType.Hyperlink;
+            bool clickable = invoke || toggle || expandCollapse || selectionItem || valueSettable || isHyperlink;
 
             string runtimeId = (Prop(element, AutomationElement.RuntimeIdProperty) is int[] rid)
                 ? string.Join(",", rid)
@@ -308,7 +323,7 @@ namespace UiAutomationGRPC.Server.Handlers
                 UiAutomationId = automationId,
                 Name = name,
                 ControlType = controlTypeName,
-                IsClickable = invoke || toggle,
+                IsClickable = clickable,
                 IsVisible = !isOffscreen,
                 BoundingRectangle = hasRect ? $"{(int)rect.Left},{(int)rect.Top},{(int)rect.Width},{(int)rect.Height}" : null
             };

@@ -25,6 +25,13 @@ public class Program
         var certPassword = builder.Configuration.GetValue<string>("Security:CertificatePassword") ?? "";
         var tokenAuthEnabled = builder.Configuration.GetValue<bool>("Security:TokenAuthEnabled");
 
+        // Bind to loopback (127.0.0.1) by default — this service can launch/kill processes and
+        // synthesize input, so it must not be reachable from other hosts unless explicitly opted in.
+        // Set Security:AllowRemote=true to listen on all interfaces (0.0.0.0).
+        var allowRemote = builder.Configuration.GetValue<bool>("Security:AllowRemote");
+        var bindAddress = allowRemote ? IPAddress.Any : IPAddress.Loopback;
+        var bindHost = allowRemote ? "0.0.0.0" : "127.0.0.1";
+
         // Fail-closed warning: token auth with no configured tokens rejects every request.
         if (tokenAuthEnabled)
         {
@@ -116,13 +123,15 @@ public class Program
                 if (!string.IsNullOrEmpty(certPath) && File.Exists(certPath))
                 {
                     var cert = new X509Certificate2(certPath, certPassword);
-                    options.Listen(IPAddress.Any, port, listenOptions =>
+                    options.Listen(bindAddress, port, listenOptions =>
                     {
                         listenOptions.Protocols = HttpProtocols.Http2;
                         listenOptions.UseHttps(cert);
                     });
                     Console.WriteLine($"╔══════════════════════════════════════════════════════════════════╗");
-                    Console.WriteLine($"║  ✓ SECURE MODE: gRPC Server listening on https://0.0.0.0:{port}  ");
+                    Console.WriteLine($"║  ✓ SECURE MODE: gRPC Server listening on https://{bindHost}:{port}  ");
+                    if (allowRemote)
+                        Console.WriteLine($"║  ⚠ AllowRemote=true — reachable from other hosts on all interfaces ");
                     Console.WriteLine($"╚══════════════════════════════════════════════════════════════════╝");
                 }
                 else
@@ -139,16 +148,18 @@ public class Program
             else
             {
                 // HTTP mode - insecure with warning
-                options.Listen(IPAddress.Any, port, listenOptions =>
+                options.Listen(bindAddress, port, listenOptions =>
                 {
                     listenOptions.Protocols = HttpProtocols.Http2;
                 });
-                
+
                 Console.ForegroundColor = ConsoleColor.Yellow;
                 Console.WriteLine($"╔═══════════════════════════════════════════════════════════════╗");
                 Console.WriteLine($"║  !! WARNING: INSECURE MODE - CONNECTION IS NOT ENCRYPTED !!  ║");
                 Console.WriteLine($"║  This mode should only be used for development/testing.      ║");
-                Console.WriteLine($"║  gRPC Server listening on http://0.0.0.0:{port,-22}          ");
+                Console.WriteLine($"║  gRPC Server listening on http://{bindHost}:{port,-22}          ");
+                if (allowRemote)
+                    Console.WriteLine($"║  ⚠ AllowRemote=true — reachable from other hosts!           ");
                 Console.WriteLine($"╚═══════════════════════════════════════════════════════════════╝");
                 Console.ResetColor();
             }

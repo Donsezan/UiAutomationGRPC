@@ -156,6 +156,12 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// <param name="appName">The name or path of the application.</param>
     /// <param name="arguments">The arguments to pass to the application.</param>
     /// <returns>A tuple containing success status, message, and process ID.</returns>
+    /// <remarks>
+    /// For UWP/Store apps (e.g. <c>calc</c>) the returned <c>ProcessId</c> may be a host/launcher
+    /// PID rather than the one that owns the window, so it may not work with the PID-based
+    /// <see cref="GetAppStructureAsync"/>/screenshot calls. Prefer <see cref="GetAppStructureAsync"/>
+    /// by app name for UWP apps. Classic Win32 apps return the correct PID.
+    /// </remarks>
     public async Task<(bool Success, string Message, int ProcessId)> OpenAppAsync(string appName, string arguments = "")
     {
         var response = await Client.OpenAppAsync(new AppRequest { AppName = appName, Arguments = arguments });

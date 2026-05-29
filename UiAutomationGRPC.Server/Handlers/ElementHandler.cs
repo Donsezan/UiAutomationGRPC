@@ -19,6 +19,9 @@ namespace UiAutomationGRPC.Server.Handlers
 
         public ElementResponse FindElement(FindElementRequest request, ServerCallContext context)
         {
+            // Business outcomes (not found / blocked / failed) are returned as
+            // { Success = false, Message } with an empty RuntimeId — not thrown as RpcException.
+            // RpcException is reserved for transport / auth / cancellation.
             try
             {
                 // 1. Resolve Start Element
@@ -27,7 +30,7 @@ namespace UiAutomationGRPC.Server.Handlers
                 {
                     if (!ElementCache.TryGetLive(request.StartRuntimeId, out startElement))
                     {
-                        throw new RpcException(new Status(StatusCode.NotFound, "Start element not found in cache."));
+                        return new ElementResponse { Success = false, Message = "Start element not found in cache." };
                     }
                 }
 
@@ -42,23 +45,19 @@ namespace UiAutomationGRPC.Server.Handlers
 
                 if (foundElement == null)
                 {
-                    throw new RpcException(new Status(StatusCode.NotFound, "Element not found matching condition."));
+                    return new ElementResponse { Success = false, Message = "Element not found matching condition." };
                 }
 
                 // 5. Validate interaction access against the owning process
                 var blocked = InteractionAccessGuard.CheckAccess(_guard, foundElement.Current.ProcessId);
                 if (blocked != null)
-                    throw new RpcException(new Status(StatusCode.PermissionDenied, blocked));
+                    return new ElementResponse { Success = false, Message = blocked };
 
                 return AutomationMapper.MapToResponse(foundElement);
             }
-            catch (RpcException)
-            {
-                throw;
-            }
             catch (Exception ex)
             {
-                throw new RpcException(new Status(StatusCode.Internal, $"Error finding element: {ex.Message}"));
+                return new ElementResponse { Success = false, Message = $"Error finding element: {ex.Message}" };
             }
         }
 
@@ -110,7 +109,7 @@ namespace UiAutomationGRPC.Server.Handlers
         {
             if (!ElementCache.TryGetLive(request.RuntimeId, out var element))
             {
-                throw new RpcException(new Status(StatusCode.NotFound, "Element not found."));
+                return new GetPropertyResponse { Success = false, Message = "Element not found." };
             }
 
             // Validate interaction access

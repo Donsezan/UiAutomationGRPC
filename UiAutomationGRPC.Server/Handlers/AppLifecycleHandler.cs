@@ -24,6 +24,18 @@ namespace UiAutomationGRPC.Server.Handlers
             _guard = guard;
         }
 
+        /// <summary>
+        /// Launches an application and returns its process ID.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>UWP / Store apps:</b> for packaged apps launched via an alias (e.g. <c>calc</c>,
+        /// which resolves to <c>CalculatorApp</c>), Windows starts the app through a host/launcher
+        /// process and <see cref="System.Diagnostics.Process.Start(System.Diagnostics.ProcessStartInfo)"/>
+        /// returns that launcher's PID — not the PID that owns the visible window. As a result the
+        /// returned <c>ProcessId</c> may not be usable with <c>GetAppStructure</c>/<c>TakeScreenshot</c>
+        /// by PID. For UWP apps prefer calling <c>GetAppStructure</c> by <c>app_name</c>, which resolves
+        /// the real top-level window. Classic Win32 apps return the correct PID.</para>
+        /// </remarks>
         public Task<OpenAppResponse> OpenApp(AppRequest request, ServerCallContext context)
         {
             _logger.LogInformation("OpenApp requested: AppName='{AppName}', Arguments='{Arguments}'",
