@@ -17,7 +17,7 @@ namespace UiAutomationGRPC.Server.Handlers
         {
             _guard = guard;
         }
-        public Task<ReflectionResponse> Reflect(ReflectionRequest request, ServerCallContext context)
+        public ReflectionResponse Reflect(ReflectionRequest request, ServerCallContext context)
         {
             var response = new ReflectionResponse();
             try
@@ -56,7 +56,7 @@ namespace UiAutomationGRPC.Server.Handlers
                         {
                             response.Success = false;
                             response.Message = "Element not found in cache (provide runtime_id).";
-                            return Task.FromResult(response);
+                            return response;
                         }
                         // Validate interaction access for element-specific reflection
                         var blockedP = InteractionAccessGuard.CheckAccess(_guard, elementPatterns.Current.ProcessId);
@@ -64,7 +64,7 @@ namespace UiAutomationGRPC.Server.Handlers
                         {
                             response.Success = false;
                             response.Message = blockedP;
-                            return Task.FromResult(response);
+                            return response;
                         }
                         var supportedPatterns = elementPatterns.GetSupportedPatterns();
                         foreach (var p in supportedPatterns)
@@ -78,7 +78,7 @@ namespace UiAutomationGRPC.Server.Handlers
                         {
                             response.Success = false;
                             response.Message = "Element not found in cache (provide runtime_id).";
-                            return Task.FromResult(response);
+                            return response;
                         }
                         // Validate interaction access for element-specific reflection
                         var blockedPr = InteractionAccessGuard.CheckAccess(_guard, elementProps.Current.ProcessId);
@@ -86,7 +86,7 @@ namespace UiAutomationGRPC.Server.Handlers
                         {
                             response.Success = false;
                             response.Message = blockedPr;
-                            return Task.FromResult(response);
+                            return response;
                         }
                         var supportedProps = elementProps.GetSupportedProperties();
                         foreach (var ap in supportedProps)
@@ -98,18 +98,18 @@ namespace UiAutomationGRPC.Server.Handlers
                     default:
                         response.Success = false;
                         response.Message = "Unknown ReflectionTarget.";
-                        return Task.FromResult(response);
+                        return response;
                 }
 
                 response.Success = true;
                 response.Message = "OK";
-                return Task.FromResult(response);
+                return response;
             }
             catch (Exception ex)
             {
                 response.Success = false;
                 response.Message = $"Reflection error: {ex.Message}";
-                return Task.FromResult(response);
+                return response;
             }
         }
 

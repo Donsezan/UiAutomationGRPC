@@ -24,6 +24,22 @@ public class Program
         var certPassword = builder.Configuration.GetValue<string>("Security:CertificatePassword") ?? "";
         var tokenAuthEnabled = builder.Configuration.GetValue<bool>("Security:TokenAuthEnabled");
 
+        // Fail-closed warning: token auth with no configured tokens rejects every request.
+        if (tokenAuthEnabled)
+        {
+            var validTokenCount = builder.Configuration.GetSection("Security:ValidTokens").Get<string[]>()?.Length ?? 0;
+            if (validTokenCount == 0)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("[Config] WARNING: TokenAuthEnabled=true but Security:ValidTokens is empty — ALL requests will be rejected as Unauthenticated.");
+                Console.ResetColor();
+            }
+            else
+            {
+                Console.WriteLine($"[Config] Token Auth: Enabled with {validTokenCount} valid token(s)");
+            }
+        }
+
         // Read feature flags
         // Cache:Enabled defaults to true — set to false for dynamic apps where fresh tree parsing is required.
         UiAutomationGRPC.Server.Helpers.ElementCache.Enabled =
@@ -32,6 +48,13 @@ public class Program
         Console.WriteLine(UiAutomationGRPC.Server.Helpers.ElementCache.Enabled
             ? "[Config] Cache: Enabled"
             : "[Config] Cache: DISABLED \u2014 every request will parse the live UI tree");
+
+        // Single serialized UI Automation worker. All UIA/input RPCs are marshalled onto
+        // one dedicated MTA thread so concurrent clients can't fight over the mouse/keyboard
+        // or race the element cache. The queue depth caps backlog before ResourceExhausted.
+        var maxQueuedRequests = builder.Configuration.GetValue("Features:MaxQueuedRequests", defaultValue: 32);
+        builder.Services.AddSingleton(_ => new UiaExecutor(maxQueuedRequests));
+        Console.WriteLine($"[Config] UIA worker: single dedicated MTA thread, max queue depth {maxQueuedRequests}");
 
         // Bind WhiteList / BlackList application access control
         var appAccessConfig = new AppAccessConfig();

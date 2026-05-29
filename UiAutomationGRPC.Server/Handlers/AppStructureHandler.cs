@@ -22,14 +22,14 @@ namespace UiAutomationGRPC.Server.Handlers
         private readonly ILogger<AppStructureHandler> _logger;
         private readonly InteractionAccessGuard? _guard;
 
-        public AppStructureHandler(ILogger<AppStructureHandler> logger, ActionHandler actionHandler = null, InteractionAccessGuard? guard = null)
+        public AppStructureHandler(ILogger<AppStructureHandler> logger, ActionHandler? actionHandler = null, InteractionAccessGuard? guard = null)
         {
             _logger = logger;
             _actionHandler = actionHandler ?? new ActionHandler();
             _guard = guard;
         }
 
-        public Task<AppStructureResponse> GetAppStructure(AppStructureRequest request, ServerCallContext context)
+        public AppStructureResponse GetAppStructure(AppStructureRequest request, ServerCallContext context)
         {
             try
             {
@@ -51,11 +51,11 @@ namespace UiAutomationGRPC.Server.Handlers
                 // is responsible only for reading structure, not launching apps.
                 if (processes == null || processes.Length == 0)
                 {
-                    return Task.FromResult(new AppStructureResponse
+                    return new AppStructureResponse
                     {
                         Success = false,
                         Message = $"Application is not running: '{request.AppName ?? $"PID {request.ProcessId}"}'. Launch the application first using OpenApp."
-                    });
+                    };
                 }
 
                 AutomationElement rootMapElement = null;
@@ -136,12 +136,12 @@ namespace UiAutomationGRPC.Server.Handlers
                 }
                 
                 if (rootMapElement == null)
-                    return Task.FromResult(new AppStructureResponse { Success = false, Message = "Main window element not found." });
+                    return new AppStructureResponse { Success = false, Message = "Main window element not found." };
 
                 // Validate interaction access against the owning process
                 var blocked = InteractionAccessGuard.CheckAccess(_guard, rootMapElement.Current.ProcessId);
                 if (blocked != null)
-                    return Task.FromResult(new AppStructureResponse { Success = false, Message = blocked });
+                    return new AppStructureResponse { Success = false, Message = blocked };
 
                 // Flush stale cache for this process before rebuilding fresh
                 try { ElementCache.ClearByProcess(rootMapElement.Current.ProcessId); }
@@ -150,17 +150,17 @@ namespace UiAutomationGRPC.Server.Handlers
                 var rootNode = BuildAppNode(rootMapElement);
                 var json = JsonConvert.SerializeObject(rootNode, Formatting.Indented);
 
-                return Task.FromResult(new AppStructureResponse { Success = true, JsonStructure = json, Message = "Structure retrieved." });
+                return new AppStructureResponse { Success = true, JsonStructure = json, Message = "Structure retrieved." };
             }
             catch (Exception ex)
             {
-                return Task.FromResult(new AppStructureResponse { Success = false, Message = $"Error: {ex.Message}" });
+                return new AppStructureResponse { Success = false, Message = $"Error: {ex.Message}" };
             }
         }
 
-        public async Task<AppStructureResponse> PerformActionWithStructure(PerformActionRequest request, ServerCallContext context)
+        public AppStructureResponse PerformActionWithStructure(PerformActionRequest request, ServerCallContext context)
         {
-            var actionResult = await _actionHandler.PerformAction(request, context);
+            var actionResult = _actionHandler.PerformAction(request, context);
             if (!actionResult.Success)
             {
                 return new AppStructureResponse { Success = false, Message = actionResult.Message };
@@ -171,7 +171,9 @@ namespace UiAutomationGRPC.Server.Handlers
                 var window = ScreenshotHandler.GetTopLevelWindow(element);
                 if (window != null)
                 {
-                    await Task.Delay(200);
+                    // Let the UI settle after the action. We hold the worker for this window
+                    // intentionally so no other operation interleaves before the refreshed read.
+                    Thread.Sleep(200);
 
                     // Flush stale cache for this process before rebuilding fresh
                     try { ElementCache.ClearByProcess(window.Current.ProcessId); }

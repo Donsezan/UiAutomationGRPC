@@ -20,7 +20,7 @@ namespace UiAutomationGRPC.Server.Handlers
         {
             _guard = guard;
         }
-        public Task<ScreenshotResponse> TakeScreenshot(ScreenshotRequest request, ServerCallContext context)
+        public ScreenshotResponse TakeScreenshot(ScreenshotRequest request, ServerCallContext context)
         {
             Bitmap bmp = null;
             try
@@ -51,7 +51,7 @@ namespace UiAutomationGRPC.Server.Handlers
                         // Validate interaction access before capturing
                         var blocked = InteractionAccessGuard.CheckAccess(_guard, targetElement.Current.ProcessId);
                         if (blocked != null)
-                            return Task.FromResult(new ScreenshotResponse { Success = false, Message = blocked });
+                            return new ScreenshotResponse { Success = false, Message = blocked };
 
                         captureRect = new System.Drawing.Rectangle((int)rect.X, (int)rect.Y, (int)rect.Width, (int)rect.Height);
                         bmp = CaptureRegion(captureRect);
@@ -64,7 +64,7 @@ namespace UiAutomationGRPC.Server.Handlers
                         // Validate interaction access before capturing
                         var blockedW = InteractionAccessGuard.CheckAccess(_guard, targetElement.Current.ProcessId);
                         if (blockedW != null)
-                            return Task.FromResult(new ScreenshotResponse { Success = false, Message = blockedW });
+                            return new ScreenshotResponse { Success = false, Message = blockedW };
 
                         // Traverse up to find the window
                         var windowElement = GetTopLevelWindow(targetElement);
@@ -113,17 +113,17 @@ namespace UiAutomationGRPC.Server.Handlers
                 using (var ms = new MemoryStream())
                 {
                     bmp.Save(ms, ImageFormat.Png);
-                    return Task.FromResult(new ScreenshotResponse 
-                    { 
-                        Success = true, 
-                        ImageData = Google.Protobuf.ByteString.CopyFrom(ms.ToArray()), 
+                    return new ScreenshotResponse
+                    {
+                        Success = true,
+                        ImageData = Google.Protobuf.ByteString.CopyFrom(ms.ToArray()),
                         Message = "Screenshot taken."
-                    });
+                    };
                 }
             }
             catch (Exception ex)
             {
-                return Task.FromResult(new ScreenshotResponse { Success = false, Message = $"Error taking screenshot: {ex.Message}" });
+                return new ScreenshotResponse { Success = false, Message = $"Error taking screenshot: {ex.Message}" };
             }
             finally
             {
