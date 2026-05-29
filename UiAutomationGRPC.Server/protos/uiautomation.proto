@@ -123,7 +123,7 @@ enum ActionType {
     EXPAND_COLLAPSE = 3;
     SET_VALUE = 4;
     SET_FOCUS = 5;
-    CLICK = 6; // Simulated via GetClickablePoint + Input 
+    CLICK = 6; // Legacy: invokes via InvokePattern, falling back to a simulated left-click. Prefer INVOKE or LeftClick.
     Move = 7; // Move cursor
     MoveTo = 8; // Move cursor to element's clickable point
     LeftClick = 9; // Simulated left click

@@ -14,12 +14,14 @@ namespace UiAutomationGRPC.Server.Handlers
         private const int ProcessExitTimeoutMs = 5000;
 
         private readonly AppAccessValidator? _validator;
+        private readonly InteractionAccessGuard? _guard;
         private readonly ILogger<AppLifecycleHandler> _logger;
 
-        public AppLifecycleHandler(ILogger<AppLifecycleHandler> logger, AppAccessValidator? validator = null)
+        public AppLifecycleHandler(ILogger<AppLifecycleHandler> logger, AppAccessValidator? validator = null, InteractionAccessGuard? guard = null)
         {
             _logger = logger;
             _validator = validator;
+            _guard = guard;
         }
 
         public Task<OpenAppResponse> OpenApp(AppRequest request, ServerCallContext context)
@@ -72,7 +74,11 @@ namespace UiAutomationGRPC.Server.Handlers
 
             try
             {
-                var processes = Process.GetProcessesByName(request.AppName);
+                // GetProcessesByName expects a name without extension — strip ".exe"
+                // so callers can pass either "notepad" or "notepad.exe" consistently
+                // with GetAppStructure / ClearByName.
+                string processName = ElementCache.StripExeExtension(request.AppName);
+                var processes = Process.GetProcessesByName(processName);
                 _logger.LogInformation("CloseApp: Found {Count} process(es) for '{AppName}'",
                     processes.Length, request.AppName);
 
@@ -84,6 +90,17 @@ namespace UiAutomationGRPC.Server.Handlers
                     try
                     {
                         int pid = p.Id;
+
+                        // Respect interaction restrictions — terminating a process is an
+                        // interaction and must obey the same WhiteList / BlackList policy.
+                        var blocked = InteractionAccessGuard.CheckAccess(_guard, pid);
+                        if (blocked != null)
+                        {
+                            _logger.LogWarning("CloseApp: BLOCKED process {ProcessId}: {Reason}", pid, blocked);
+                            exceptions.Add($"PID {pid}: {blocked}");
+                            continue;
+                        }
+
                         p.Kill();
                         if (!p.WaitForExit(ProcessExitTimeoutMs))
                         {
@@ -130,6 +147,15 @@ namespace UiAutomationGRPC.Server.Handlers
 
             try
             {
+                // Respect interaction restrictions — terminating a process must obey
+                // the same WhiteList / BlackList policy as other interactions.
+                var blocked = InteractionAccessGuard.CheckAccess(_guard, request.ProcessId);
+                if (blocked != null)
+                {
+                    _logger.LogWarning("CloseAppByProcessId: BLOCKED PID={ProcessId}: {Reason}", request.ProcessId, blocked);
+                    return Task.FromResult(new PerformActionResponse { Success = false, Message = blocked });
+                }
+
                 var process = Process.GetProcessById(request.ProcessId);
                 process.Kill();
                 if (!process.WaitForExit(ProcessExitTimeoutMs))

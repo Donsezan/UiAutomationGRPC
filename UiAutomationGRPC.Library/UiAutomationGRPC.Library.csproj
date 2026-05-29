@@ -18,7 +18,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Protobuf Include="Protos\uiautomation.proto" GrpcServices="Client" Access="Public" />
+    <!-- Single source of truth: the contract lives in the Server project. Referenced
+         here by relative path (compiled as Client stubs) so there is no duplicate copy
+         to keep in sync. Link keeps it visible under Protos\ in the project tree. -->
+    <Protobuf Include="..\UiAutomationGRPC.Server\protos\uiautomation.proto" Link="Protos\uiautomation.proto" GrpcServices="Client" Access="Public" />
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
