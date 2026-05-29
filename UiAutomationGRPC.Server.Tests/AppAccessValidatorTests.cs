@@ -298,17 +298,40 @@ namespace UiAutomationGRPC.Server.Tests
         // ═══════════════════════════════════════════════════════════════
 
         [Test]
-        public void ResolvesShortName_Notepad()
+        public void ResolvesShortName_ViaPath()
         {
-            // "notepad" should resolve via PATH to C:\Windows\System32\notepad.exe
-            var v = MakeValidator(whiteList: new()
-            {
-                new WhiteListEntry { Path = NotepadPath }
-            });
+            // Short-name resolution goes through where.exe, which searches the *host process* PATH.
+            // Resolving a system binary like "notepad" makes the test depend on the launching shell's
+            // PATH ordering — e.g. a Git-Bash PATH resolves "notepad" to C:\Program Files\Git\usr\bin\notepad,
+            // and Windows itself ships notepad.exe in both System32 and C:\Windows. To be deterministic
+            // and host-independent, drop a uniquely-named dummy exe into a temp dir, put that dir first on
+            // PATH, and assert the short name resolves to it. This exercises the real where.exe resolution
+            // + whitelist matching without depending on any ambient system binary.
+            var tempDir = Path.Combine(Path.GetTempPath(), "uiauto_test_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tempDir);
+            var exeName = "uiautotestapp_" + Guid.NewGuid().ToString("N")[..8];
+            var exePath = Path.Combine(tempDir, exeName + ".exe");
+            File.WriteAllBytes(exePath, new byte[] { 0x4D, 0x5A }); // "MZ" stub; where.exe only checks existence
 
-            var (allowed, resolvedPath, _) = v.Validate("notepad", null);
-            Assert.That(allowed, Is.True);
-            Assert.That(resolvedPath, Is.EqualTo(NotepadPath).IgnoreCase);
+            var originalPath = Environment.GetEnvironmentVariable("PATH") ?? "";
+            try
+            {
+                Environment.SetEnvironmentVariable("PATH", tempDir + Path.PathSeparator + originalPath);
+
+                var v = MakeValidator(whiteList: new()
+                {
+                    new WhiteListEntry { Path = exePath }
+                });
+
+                var (allowed, resolvedPath, reason) = v.Validate(exeName, null);
+                Assert.That(allowed, Is.True, $"resolved='{resolvedPath}' reason='{reason}'");
+                Assert.That(resolvedPath, Is.EqualTo(exePath).IgnoreCase);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("PATH", originalPath);
+                try { Directory.Delete(tempDir, recursive: true); } catch { /* best-effort cleanup */ }
+            }
         }
 
         [Test]
