@@ -103,6 +103,35 @@ namespace UiAutomationGRPC.Server.Helpers
         }
 
         /// <summary>
+        /// Caches an element using locator values the caller has ALREADY read (e.g. from a
+        /// <see cref="System.Windows.Automation.CacheRequest"/> batch), avoiding the per-property
+        /// COM round-trips that the <see cref="CacheElement(AutomationElement)"/> overload incurs.
+        /// Returns the supplied <paramref name="runtimeId"/> unchanged.
+        /// </summary>
+        public static string CacheElement(
+            AutomationElement element,
+            string runtimeId,
+            string automationId,
+            string name,
+            string className,
+            string controlTypeName,
+            int processId)
+        {
+            if (!Enabled || string.IsNullOrEmpty(runtimeId)) return runtimeId;
+
+            _cache[runtimeId] = new CachedElement
+            {
+                Element = element,
+                AutomationId = automationId ?? "",
+                Name = name ?? "",
+                ClassName = className ?? "",
+                ControlTypeName = controlTypeName ?? "",
+                ProcessId = processId
+            };
+            return runtimeId;
+        }
+
+        /// <summary>
         /// Removes all cached elements belonging to a specific process.
         /// Returns 0 immediately when caching is disabled.
         /// </summary>

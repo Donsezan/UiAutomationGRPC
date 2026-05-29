@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using UiAutomation;
 using UiAutomationGRPC.Server.Handlers;
 using UiAutomationGRPC.Server.Helpers;
+using UiAutomationGRPC.Server.Models;
 
 namespace UiAutomationGRPC.Server
 {
@@ -26,7 +27,8 @@ namespace UiAutomationGRPC.Server
             UiaExecutor executor,
             AppAccessValidator? appAccessValidator = null,
             KeyAccessValidator? keyAccessValidator = null,
-            InteractionAccessGuard? interactionGuard = null)
+            InteractionAccessGuard? interactionGuard = null,
+            AppStructureOptions? appStructureOptions = null)
         {
             _logger = loggerFactory.CreateLogger<UiAutomationService>();
             _executor = executor;
@@ -34,7 +36,7 @@ namespace UiAutomationGRPC.Server
             _actionHandler = new ActionHandler(keyAccessValidator, interactionGuard);
             _appHandler = new AppLifecycleHandler(loggerFactory.CreateLogger<AppLifecycleHandler>(), appAccessValidator, interactionGuard);
             _screenshotHandler = new ScreenshotHandler(interactionGuard);
-            _structureHandler = new AppStructureHandler(loggerFactory.CreateLogger<AppStructureHandler>(), _actionHandler, interactionGuard);
+            _structureHandler = new AppStructureHandler(loggerFactory.CreateLogger<AppStructureHandler>(), _actionHandler, interactionGuard, appStructureOptions);
             _reflectionHandler = new ReflectionHandler(interactionGuard);
         }
 

@@ -56,6 +56,14 @@ public class Program
         builder.Services.AddSingleton(_ => new UiaExecutor(maxQueuedRequests));
         Console.WriteLine($"[Config] UIA worker: single dedicated MTA thread, max queue depth {maxQueuedRequests}");
 
+        // App-structure tree tuning (GetAppStructure / PerformActionWithStructure — the LLM hot path).
+        var appStructureOptions = new AppStructureOptions();
+        builder.Configuration.GetSection("Features:AppStructure").Bind(appStructureOptions);
+        builder.Services.AddSingleton(appStructureOptions);
+        Console.WriteLine(
+            $"[Config] AppStructure: maxDepth {appStructureOptions.MaxDepth}, maxNodes {appStructureOptions.MaxNodes}, " +
+            $"includeOffscreen {appStructureOptions.IncludeOffscreen}, compactJson {appStructureOptions.CompactJson}");
+
         // Bind WhiteList / BlackList application access control
         var appAccessConfig = new AppAccessConfig();
         builder.Configuration.GetSection("WhiteList").Bind(appAccessConfig.WhiteList);
