@@ -14,9 +14,9 @@ The tools in this folder bridge the gap between the gRPC server and LLM interfac
 
 ## Folder Structure
 
-- **[MCP](./MCP/)**: A **Model Context Protocol (MCP)** server implementation.
+- **[MCP](./MCP/)**: A **Model Context Protocol (MCP)** server built on the official ModelContextProtocol C# SDK.
     - Connects to `UiAutomationGRPC.Server` via gRPC (default: `localhost:50051`)
-    - Exposes callable tools to the LLM: `open_app`, `get_app_structure`, `perform_action`, `perform_action_with_structure`, `close_app`, `take_screenshot`, `clear_cache`
+    - Exposes callable tools to the LLM: `open_app`, `close_app`, `get_app_structure`, `find_element`, `get_children`, `get_property`, `perform_action`, `perform_action_with_structure`, `send_keys`, `take_screenshot` (returns image content), `clear_cache`
     
 - **[Skill](./Skill/)**: Skill definitions (e.g., `SKILL.md`) that teach an LLM how to effectively use the available tools.
 
@@ -31,11 +31,11 @@ The interaction follows a standard loop:
 
 ```
 1.  User: "Open Calculator and calculate 5 + 5."
-2.  LLM (Tool Call): open_app(app_name="calc")
-3.  LLM (Tool Call): get_app_structure(app_name="calc")
+2.  LLM (Tool Call): open_app(appName="calc")
+3.  LLM (Tool Call): get_app_structure(useProcessId=false, appName="calc")
     → Server returns JSON describing the Calculator UI.
 4.  LLM (Reasoning): "I see buttons for Five, Plus, and Equals."
-5.  LLM (Tool Call): perform_action_with_structure(runtime_id="...", action="INVOKE")
+5.  LLM (Tool Call): perform_action_with_structure(runtimeId="...", action="INVOKE")
     → Clicks Five and returns updated structure
 6.  Continue clicking Plus, Five, Equals...
 ```

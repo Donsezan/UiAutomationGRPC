@@ -2,47 +2,73 @@
 
 A C# MCP (Model Context Protocol) server that bridges LLMs (like Claude/Antigravity) with `UiAutomationGRPC.Server` for Windows UI automation.
 
-Connects via gRPC (default: `http://localhost:50051`) and exposes UI automation capabilities as MCP Tools.
+Built on the official **[ModelContextProtocol](https://www.nuget.org/packages/ModelContextProtocol) C# SDK** (stdio transport, proper protocol lifecycle/version negotiation, cancellation). Connects to the gRPC server (default: `https://localhost:50051`) and exposes UI automation capabilities as MCP Tools — the same capabilities the `UiAutomationGRPC.Library` client SDK offers for QA scripting, so an LLM can drive the same See → Think → Act and element-level flows.
+
+> **Tool argument names are camelCase** (e.g. `appName`, `processId`, `runtimeId`, `useProcessId`) — they are derived from the SDK tool signatures. The tool *names* remain snake_case (`open_app`, `get_app_structure`, …).
 
 ## Tools
 
 ### `open_app`
 Launches an application.
-- **app_name**: Path to executable or app name (e.g., `calc`, `notepad`).
+- **appName**: Path to executable or app name (e.g., `calc`, `notepad`).
 - **arguments**: Optional command line arguments.
 
+> For UWP/Store apps (e.g. `calc`) the returned PID may be a launcher/host process — prefer addressing such apps by name in `get_app_structure`.
+
 ### `get_app_structure`
-Retrieves the full UI structure of an application as a JSON tree.
-- **process_id**: Process ID of the target app.
-- **app_name**: Name of the app (if Process ID is not used).
-- **use_process_id**: Boolean to switch between PID and Name lookup.
+Retrieves the full UI structure of an application as a compact JSON tree.
+- **useProcessId**: Boolean to switch between PID and Name lookup.
+- **processId**: Process ID of the target app (when `useProcessId` is true).
+- **appName**: Name of the app (when `useProcessId` is false).
 
 ### `perform_action`
 Performs an action on a UI element.
-- **runtime_id**: The unique ID of the element (from `get_app_structure`).
-- **action**: The action to perform (e.g., `INVOKE`, `LEFT_CLICK`, `SET_VALUE`, `EXPAND_COLLAPSE`).
+- **runtimeId**: The unique ID of the element (from `get_app_structure` / `find_element`).
+- **action**: The action to perform (e.g., `INVOKE`, `LeftClick`, `SET_VALUE`, `EXPAND_COLLAPSE`).
 - **arguments**: Optional list of arguments (e.g., text for `SET_VALUE`).
 
 ### `perform_action_with_structure`
 Performs an action on a UI element and returns the updated app structure. Ideal for LLM "See → Think → Act" loops.
-- **runtime_id**: The unique ID of the element.
+- **runtimeId**: The unique ID of the element.
 - **action**: The action to perform.
 - **arguments**: Optional list of arguments.
 
 ### `close_app`
 Closes an application by Process ID.
-- **process_id**: The Process ID to terminate.
+- **processId**: The Process ID to terminate.
+
+### `find_element`
+Finds a single element by a property condition and returns its `runtime_id`.
+- **propertyName** / **propertyValue**: e.g. `Name` / `Save`, `AutomationId` / `num2Button`, `ControlType` / `Button`.
+- **startRuntimeId**: Optional. Search under this element; empty searches from the desktop root.
+- **scope**: Optional. `ELEMENT`, `CHILDREN`, `DESCENDANTS` (default), `SUBTREE`, `PARENT`, `ANCESTORS`.
+- **propertyType**: Optional value-type hint — `STRING` (default), `BOOL`, `INT`.
+
+### `get_children`
+Returns the immediate child elements of an element (or the desktop when `runtimeId` is empty), each with its `runtime_id` and identifying properties.
+- **runtimeId**: Optional. Parent element; empty for the desktop root.
+
+### `get_property`
+Reads a single UI Automation property of an element.
+- **runtimeId**: The element to read.
+- **propertyName**: e.g. `Name`, `IsEnabled`, `Value`.
+
+### `send_keys`
+Sends keystrokes (`System.Windows.Forms.SendKeys` syntax, e.g. `{ENTER}`, `^a`).
+- **keys**: The keys to send.
+- **runtimeId**: Optional. When set, the element is focused first so keys land on that control; otherwise keys go to whatever currently has focus.
+- **wait**: Optional. Wait for the keys to be processed (default `true`).
 
 ### `take_screenshot`
-Takes a screenshot of the application window or a specific element. Saves the image to a temp folder and returns the file path.
+Takes a screenshot of the application window or a specific element and returns it **as MCP image content (base64 PNG)** the model can see directly — no temp file.
 - **mode**: `element` or `window`.
-- **runtime_id**: Required for `element` mode, optional for `window` mode.
-- **process_id**: Optional, used for `window` mode if `runtime_id` is not provided.
+- **runtimeId**: Required for `element` mode, optional for `window` mode.
+- **processId**: Optional, used for `window` mode if `runtimeId` is not provided.
 
 ### `clear_cache`
 Clears the server-side element cache. Call without arguments to clear all, or scope to a specific application.
-- **process_id**: Optional. Clear cache for a specific process ID.
-- **app_name**: Optional. Clear cache by application name (like `close_app`).
+- **processId**: Optional. Clear cache for a specific process ID.
+- **appName**: Optional. Clear cache by application name (like `close_app`).
 
 ## Prerequisites
 
