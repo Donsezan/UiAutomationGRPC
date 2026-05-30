@@ -194,5 +194,90 @@ namespace UiAutomationGRPC.Server.Tests
         {
             Assert.That(ElementCache.StripExeExtension(input), Is.EqualTo(expected));
         }
+
+        // ────────────────────────────── ClearByName (UIA-free) ──────────────────────────────
+        // Entries are injected via the metadata-overload so no real AutomationElement is needed.
+        // ClearByName resolves name → PIDs via Process.GetProcessesByName and then filters the
+        // cache by PID — the element reference itself is never touched.
+
+        [Test]
+        public void ClearByName_NullOrEmpty_ReturnsZeroWithoutThrowing()
+        {
+            InsertFakeEntry("id-x", 5000);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(ElementCache.ClearByName(null!), Is.EqualTo(0));
+                Assert.That(ElementCache.ClearByName(""), Is.EqualTo(0));
+                Assert.That(ElementCache.Count, Is.EqualTo(1), "Unrelated entry must not be removed");
+            });
+        }
+
+        [Test]
+        public void ClearByName_UnknownProcessName_RemovesNothing()
+        {
+            InsertFakeEntry("id-y", 5001);
+
+            int removed = ElementCache.ClearByName("__no_such_process_xyz__");
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(removed, Is.EqualTo(0));
+                Assert.That(ElementCache.Count, Is.EqualTo(1));
+            });
+        }
+
+        [Test]
+        public void ClearByName_WithPlainName_ClearsMatchingEntries()
+        {
+            var proc = System.Diagnostics.Process.GetCurrentProcess();
+            InsertFakeEntry("id-proc-plain", proc.Id);
+            InsertFakeEntry("id-unrelated", proc.Id + 99999);
+
+            int removed = ElementCache.ClearByName(proc.ProcessName);
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(removed, Is.GreaterThanOrEqualTo(1));
+                Assert.That(ElementCache.TryGetLive("id-proc-plain", out _), Is.False,
+                    "Entry for the current process must be evicted");
+            });
+        }
+
+        [Test]
+        public void ClearByName_WithExeSuffix_MatchesSameProcessAsWithout()
+        {
+            var proc = System.Diagnostics.Process.GetCurrentProcess();
+            InsertFakeEntry("id-proc-exe", proc.Id);
+
+            // .exe suffix must be stripped before the GetProcessesByName call
+            int removed = ElementCache.ClearByName(proc.ProcessName + ".exe");
+
+            Assert.That(removed, Is.GreaterThanOrEqualTo(1));
+        }
+
+        [Test]
+        public void ClearByName_ExeSuffixAndPlainName_ProduceSameResult()
+        {
+            var proc = System.Diagnostics.Process.GetCurrentProcess();
+
+            InsertFakeEntry("id-a", proc.Id);
+            int withSuffix = ElementCache.ClearByName(proc.ProcessName + ".exe");
+
+            ElementCache.Clear();
+            InsertFakeEntry("id-b", proc.Id);
+            int withoutSuffix = ElementCache.ClearByName(proc.ProcessName);
+
+            Assert.That(withSuffix, Is.EqualTo(withoutSuffix),
+                ".exe suffix must produce the same removal count as the plain name");
+        }
+
+        // ────────────────────────────── Helper ──────────────────────────────
+
+        private static void InsertFakeEntry(string runtimeId, int processId)
+        {
+            // null element is safe: ClearByProcess/ClearByName only inspect ProcessId.
+            ElementCache.CacheElement(null!, runtimeId, "", "fake", "", "", processId);
+        }
     }
 }
