@@ -49,13 +49,16 @@ public class Program
         }
 
         // Read feature flags
-        // Cache:Enabled defaults to true — set to false for dynamic apps where fresh tree parsing is required.
+        // Cache:Enabled defaults to true — selects the RuntimeId resolution strategy, NOT property freshness.
+        // RuntimeId addressing works in BOTH modes: enabled reuses element handles (re-finding stale
+        // ones); disabled re-resolves every element from the live tree per access (slower). Enabled is
+        // recommended even for dynamic UIs since it already re-finds obsolete elements automatically.
         UiAutomationGRPC.Server.Helpers.ElementCache.Enabled =
             builder.Configuration.GetValue("Features:Cache:Enabled", defaultValue: true);
 
         Console.WriteLine(UiAutomationGRPC.Server.Helpers.ElementCache.Enabled
-            ? "[Config] Cache: Enabled"
-            : "[Config] Cache: DISABLED \u2014 every request will parse the live UI tree");
+            ? "[Config] Cache: Enabled (persisted element handles reused, re-found if stale)"
+            : "[Config] Cache: DISABLED \u2014 every request re-resolves elements from the live UI tree");
 
         // Single serialized UI Automation worker. All UIA/input RPCs are marshalled onto
         // one dedicated MTA thread so concurrent clients can't fight over the mouse/keyboard

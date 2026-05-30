@@ -1,47 +1,65 @@
-﻿using UiAutomationGRPC.Library;
+using UiAutomationGRPC.Library;
 using UiAutomationGRPC.Library.Selectors;
 using UiAutomationGRPC.Library.Elements;
 
 namespace UiAutomationGRPC.Client.Calc.Pages;
 
-public class CalcNavigationPaget<TPage> : BasePageObject<TPage> where TPage : BasePageObject<TPage>
+/// <summary>
+/// Page Object for Calculator's hamburger navigation pane (opened from <see cref="CalcPage"/>).
+/// Lists the calculator modes (Standard, Scientific, …) plus the footer Settings item.
+/// Locators are real <c>NavigationViewItem</c> AutomationIds, verified live.
+/// </summary>
+public class CalcNavigationPage : BasePageObject<CalcNavigationPage>
 {
-    private readonly TPage _previousPage;
-    private readonly CalcNavigationPagetLocators _locators;
-    
-    public CalcNavigationPaget(UiAutomationDriver driver, TPage previousPage) : base(driver)
+    private readonly CalcNavigationLocators _locators;
+
+    public CalcNavigationPage(UiAutomationDriver driver) : base(driver)
     {
-        _driver = driver ?? throw new ArgumentNullException(nameof(driver));
-        _previousPage = previousPage;
-        _locators = new CalcNavigationPagetLocators(driver);
+        _locators = new CalcNavigationLocators(driver);
     }
 
-    /// <summary>
-    /// Waits for the page to be ready. Call after construction.
-    /// </summary>
-    public Task<CalcNavigationPaget<TPage>> WaitForReady() =>
-        ResolveAsync(async () => { await _locators.ButtonSettings.WaitForElementExistAsync(); return this; });
+    /// <summary>Waits until the pane is open (the Settings item is visible).</summary>
+    public Task<CalcNavigationPage> WaitForReady() =>
+        ResolveAsync(async () => { await _locators.SettingsItem.WaitForElementExistAsync(); return this; });
 
-    public Task<CalcSettingsPage<TPage>> ClickSettings() =>
-        ResolveAsync(async () => { await _locators.ButtonSettings.ClickAsync(); return new CalcSettingsPage<TPage>(_driver, _previousPage); });
-    
-    public Task<TPage> ClickNavigationButton() =>
-        ResolveAsync(async () => { await _locators.ButtonNavigation.ClickAsync(); return _previousPage; });
+    /// <summary>Opens the Settings/About page and transitions to <see cref="CalcSettingsPage"/>.</summary>
+    public Task<CalcSettingsPage> OpenSettings() =>
+        ResolveAsync(async () =>
+        {
+            await _locators.SettingsItem.ClickAsync();
+            return await new CalcSettingsPage(_driver).WaitForReady();
+        });
+
+    /// <summary>Switches to Scientific mode and returns to <see cref="CalcPage"/>.</summary>
+    public Task<CalcPage> SwitchToScientific() =>
+        ResolveAsync(async () =>
+        {
+            await _locators.Scientific.ClickAsync();
+            return await new CalcPage(_driver).WaitForReady();
+        });
+
+    /// <summary>Switches to Standard mode and returns to <see cref="CalcPage"/>.</summary>
+    public Task<CalcPage> SwitchToStandard() =>
+        ResolveAsync(async () =>
+        {
+            await _locators.Standard.ClickAsync();
+            return await new CalcPage(_driver).WaitForReady();
+        });
 }
 
-public class CalcNavigationPagetLocators
+public class CalcNavigationLocators
 {
     private readonly UiAutomationDriver _driver;
 
-    public CalcNavigationPagetLocators(UiAutomationDriver driver) => _driver = driver;
-
-    private IAutomationElement CreateElement(Func<BaseSelector> selector) => new UiElement(_driver, selector);
+    public CalcNavigationLocators(UiAutomationDriver driver) => _driver = driver;
 
     private Selector Window => new Selector(new PropertyConditions().NameProperty("Calculator"));
 
-    private IAutomationElement Element(string automationId) =>
-        CreateElement(() => Window.Descendants(new PropertyConditions().AutomationIdProperty(automationId)));
+    private IAutomationElement E(string automationId) =>
+        new UiElement(_driver, () => Window.Descendants(new PropertyConditions().AutomationIdProperty(automationId)));
 
-    public IAutomationElement ButtonSettings => Element("num1Button");
-    public IAutomationElement ButtonNavigation => Element("GlobalNavButton");
+    public IAutomationElement Standard => E("Standard");
+    public IAutomationElement Scientific => E("Scientific");
+    public IAutomationElement Programmer => E("Programmer");
+    public IAutomationElement SettingsItem => E("SettingsItem");
 }

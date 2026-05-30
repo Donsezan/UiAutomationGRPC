@@ -8,8 +8,25 @@ using PropertyCondition = System.Windows.Automation.PropertyCondition;
 namespace UiAutomationGRPC.Server.Helpers
 {
     /// <summary>
-    /// Thread-safe element cache that validates liveness on every access.
-    /// Stores locator info alongside references so dead elements can be re-found.
+    /// Thread-safe element registry that maps a <c>RuntimeId</c> handle back to a LIVE
+    /// <see cref="AutomationElement"/>. It stores locator metadata (PID + AutomationId/Name/ClassName)
+    /// alongside each reference so an element that has gone stale — or that must be re-read fresh —
+    /// can be re-located from the live UI tree.
+    ///
+    /// This is a <b>handle registry with re-find</b>, not a property-value cache: handlers always read
+    /// property values live at call time. RuntimeId resolution therefore works in <i>both</i> modes:
+    ///
+    /// <list type="bullet">
+    /// <item><b>Enabled</b> (default): persisted handles are trusted via a fast liveness probe and only
+    /// re-located when they go stale. Fastest for repeated access to the same element.</item>
+    /// <item><b>Disabled</b>: every access re-resolves the element from the current live tree (honouring
+    /// the "parse the live UI tree per request" contract), falling back to the persisted handle only
+    /// when a scoped re-find can't locate it. Slower, but always reflects the live tree.</item>
+    /// </list>
+    ///
+    /// Disabling the cache no longer breaks cross-call addressing — it only changes the resolution
+    /// strategy. For dynamic UIs the enabled mode is usually preferable because it already re-finds
+    /// obsolete elements automatically.
     /// </summary>
     public static class ElementCache
     {
@@ -29,24 +46,53 @@ namespace UiAutomationGRPC.Server.Helpers
         private static readonly ConcurrentDictionary<string, CachedElement> _cache = new();
 
         /// <summary>
-        /// Controls whether element caching is active.
-        /// When false, every cache read/write becomes a no-op, forcing callers to
-        /// re-resolve elements from the live UI Automation tree on every request.
+        /// Selects the RuntimeId resolution strategy (see the type summary).
+        /// When <c>true</c> persisted handles are trusted and reused; when <c>false</c> every access
+        /// re-resolves from the live tree. In <b>both</b> modes locator metadata is stored so a
+        /// RuntimeId can always be mapped back to a live element.
         /// Set once at startup from configuration; thread-safe for reads after init.
         /// </summary>
         public static bool Enabled { get; set; } = true;
 
         /// <summary>
-        /// Gets a LIVE element: validates the cached ref, re-finds if stale.
-        /// Always returns a live AutomationElement or false.
-        /// Returns false immediately when caching is disabled.
+        /// Resolves a RuntimeId to a LIVE element.
+        /// <para>
+        /// Enabled: validates the persisted reference and re-finds it if stale.
+        /// Disabled: re-resolves from the live tree on every access, falling back to the persisted
+        /// reference only when a scoped re-find finds nothing (e.g. the desktop root, which is not a
+        /// descendant of itself and so cannot be re-found by a scoped search).
+        /// </para>
+        /// Always returns a live <see cref="AutomationElement"/> or <c>false</c>.
         /// </summary>
         public static bool TryGetLive(string runtimeId, out AutomationElement element)
         {
             element = null;
-            if (!Enabled || !_cache.TryGetValue(runtimeId, out var cached)) return false;
+            if (string.IsNullOrEmpty(runtimeId) || !_cache.TryGetValue(runtimeId, out var cached))
+                return false;
 
-            // Probe liveness via a fast COM call
+            if (!Enabled)
+            {
+                // "Parse the live tree per request": re-resolve from the current tree first.
+                var fresh = ReResolve(cached, runtimeId);
+                if (fresh != null)
+                {
+                    cached.Element = fresh;
+                    element = fresh;
+                    return true;
+                }
+
+                // Re-find found nothing — fall back to the stored handle if it is still alive.
+                if (IsLive(cached.Element))
+                {
+                    element = cached.Element;
+                    return true;
+                }
+
+                _cache.TryRemove(runtimeId, out _);
+                return false;
+            }
+
+            // Enabled: probe liveness via a fast COM call, re-find if the handle went stale.
             try
             {
                 _ = cached.Element.Current.ProcessId;
@@ -55,9 +101,8 @@ namespace UiAutomationGRPC.Server.Helpers
             }
             catch (ElementNotAvailableException)
             {
-                // Element is dead — try re-finding by locator
                 Trace.WriteLine($"[ElementCache] Element '{runtimeId}' is stale (PID={cached.ProcessId}, Name='{cached.Name}'). Attempting re-find.");
-                var refound = TryRefind(cached);
+                var refound = ReResolve(cached, runtimeId);
                 if (refound != null)
                 {
                     Trace.WriteLine($"[ElementCache] Re-found element '{runtimeId}' successfully.");
@@ -73,18 +118,17 @@ namespace UiAutomationGRPC.Server.Helpers
         }
 
         /// <summary>
-        /// Caches an element with its locator info for future re-finding.
-        /// When caching is disabled, the RuntimeId is still derived and returned
-        /// (callers depend on it for response contracts) but the element is not stored.
+        /// Registers an element with its locator info for future resolution and returns its RuntimeId.
+        /// Locator metadata is stored in both enabled and disabled modes so the returned RuntimeId
+        /// remains resolvable on subsequent calls.
         /// </summary>
         public static string CacheElement(AutomationElement element)
         {
             string runtimeId = string.Join(",", element.GetRuntimeId());
-            if (!Enabled) return runtimeId;
 
             try
             {
-                var cached = new CachedElement
+                _cache[runtimeId] = new CachedElement
                 {
                     Element = element,
                     AutomationId = element.Current.AutomationId ?? "",
@@ -93,7 +137,6 @@ namespace UiAutomationGRPC.Server.Helpers
                     ControlTypeName = element.Current.ControlType.ProgrammaticName,
                     ProcessId = element.Current.ProcessId
                 };
-                _cache[runtimeId] = cached;
             }
             catch (ElementNotAvailableException)
             {
@@ -103,10 +146,10 @@ namespace UiAutomationGRPC.Server.Helpers
         }
 
         /// <summary>
-        /// Caches an element using locator values the caller has ALREADY read (e.g. from a
+        /// Registers an element using locator values the caller has ALREADY read (e.g. from a
         /// <see cref="System.Windows.Automation.CacheRequest"/> batch), avoiding the per-property
         /// COM round-trips that the <see cref="CacheElement(AutomationElement)"/> overload incurs.
-        /// Returns the supplied <paramref name="runtimeId"/> unchanged.
+        /// Stores metadata in both modes. Returns the supplied <paramref name="runtimeId"/> unchanged.
         /// </summary>
         public static string CacheElement(
             AutomationElement element,
@@ -117,7 +160,7 @@ namespace UiAutomationGRPC.Server.Helpers
             string controlTypeName,
             int processId)
         {
-            if (!Enabled || string.IsNullOrEmpty(runtimeId)) return runtimeId;
+            if (string.IsNullOrEmpty(runtimeId)) return runtimeId;
 
             _cache[runtimeId] = new CachedElement
             {
@@ -132,12 +175,10 @@ namespace UiAutomationGRPC.Server.Helpers
         }
 
         /// <summary>
-        /// Removes all cached elements belonging to a specific process.
-        /// Returns 0 immediately when caching is disabled.
+        /// Removes all registered elements belonging to a specific process.
         /// </summary>
         public static int ClearByProcess(int processId)
         {
-            if (!Enabled) return 0;
             int removed = 0;
             foreach (var kvp in _cache)
             {
@@ -151,13 +192,12 @@ namespace UiAutomationGRPC.Server.Helpers
         }
 
         /// <summary>
-        /// Removes all cached elements belonging to processes with the given name.
+        /// Removes all registered elements belonging to processes with the given name.
         /// Works like CloseApp — resolves process name to PIDs.
-        /// Returns 0 immediately when caching is disabled.
         /// </summary>
         public static int ClearByName(string appName)
         {
-            if (!Enabled || string.IsNullOrEmpty(appName)) return 0;
+            if (string.IsNullOrEmpty(appName)) return 0;
 
             string name = StripExeExtension(appName);
 
@@ -177,20 +217,32 @@ namespace UiAutomationGRPC.Server.Helpers
         }
 
         /// <summary>
-        /// Clears all cached elements.
+        /// Clears all registered elements.
         /// </summary>
         public static void Clear() => _cache.Clear();
 
         /// <summary>
-        /// Number of cached elements. Returns 0 when caching is disabled.
+        /// Number of registered elements.
         /// </summary>
-        public static int Count => Enabled ? _cache.Count : 0;
+        public static int Count => _cache.Count;
 
         /// <summary>
-        /// Attempts to re-find a dead element using its stored locator properties.
-        /// Searches the entire desktop tree within the same process.
+        /// Re-resolves a live element from the current UI tree using the stored locator metadata.
+        /// Tries the locator-scoped re-find first (cheap, PID-filtered) and falls back to a
+        /// RuntimeId comparison walk scoped to the owning process for elements whose locator
+        /// properties are all empty (anonymous containers).
         /// </summary>
-        private static AutomationElement TryRefind(CachedElement cached)
+        private static AutomationElement ReResolve(CachedElement cached, string runtimeId)
+        {
+            return TryRefind(cached, runtimeId) ?? FindByRuntimeId(cached.ProcessId, runtimeId);
+        }
+
+        /// <summary>
+        /// Attempts to re-find an element using its stored locator properties (PID +
+        /// AutomationId/Name/ClassName). When several elements share the same locator the result is
+        /// disambiguated by RuntimeId. Returns null if nothing matching is currently live.
+        /// </summary>
+        private static AutomationElement TryRefind(CachedElement cached, string runtimeId)
         {
             try
             {
@@ -211,16 +263,84 @@ namespace UiAutomationGRPC.Server.Helpers
                     conditions.Add(new PropertyCondition(
                         AutomationElement.ClassNameProperty, cached.ClassName));
 
+                // PID alone is too broad to safely identify a single element.
                 if (conditions.Count < 2) return null;
 
                 var condition = new AndCondition(conditions.ToArray());
-                return AutomationElement.RootElement.FindFirst(
+                var matches = AutomationElement.RootElement.FindAll(
                     TreeScope.Descendants, condition);
+
+                if (matches.Count == 0) return null;
+                if (matches.Count == 1) return matches[0];
+
+                // Multiple locator matches — prefer the one whose RuntimeId still matches.
+                if (!string.IsNullOrEmpty(runtimeId))
+                {
+                    foreach (AutomationElement m in matches)
+                    {
+                        try
+                        {
+                            if (string.Join(",", m.GetRuntimeId()) == runtimeId)
+                                return m;
+                        }
+                        catch (ElementNotAvailableException) { }
+                    }
+                }
+
+                return matches[0];
             }
             catch (Exception ex)
             {
                 Trace.WriteLine($"[ElementCache] TryRefind failed for PID={cached.ProcessId}, Name='{cached.Name}': {ex.Message}");
                 return null;
+            }
+        }
+
+        /// <summary>
+        /// Last-resort resolution: walk the owning process's element tree and return the element whose
+        /// RuntimeId matches. A <see cref="PropertyCondition"/> on RuntimeId is not reliably supported
+        /// by UIA, so we filter by PID and compare RuntimeIds during the walk. Scoped to one process
+        /// to keep the search bounded.
+        /// </summary>
+        private static AutomationElement FindByRuntimeId(int processId, string runtimeId)
+        {
+            if (processId <= 0 || string.IsNullOrEmpty(runtimeId)) return null;
+
+            try
+            {
+                var pidCondition = new PropertyCondition(AutomationElement.ProcessIdProperty, processId);
+                var all = AutomationElement.RootElement.FindAll(TreeScope.Descendants, pidCondition);
+                foreach (AutomationElement e in all)
+                {
+                    try
+                    {
+                        if (string.Join(",", e.GetRuntimeId()) == runtimeId)
+                            return e;
+                    }
+                    catch (ElementNotAvailableException) { }
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"[ElementCache] FindByRuntimeId failed for PID={processId}: {ex.Message}");
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Fast liveness probe for a persisted handle. Returns false for a null or dead element.
+        /// </summary>
+        private static bool IsLive(AutomationElement element)
+        {
+            if (element == null) return false;
+            try
+            {
+                _ = element.Current.ProcessId;
+                return true;
+            }
+            catch (ElementNotAvailableException)
+            {
+                return false;
             }
         }
 

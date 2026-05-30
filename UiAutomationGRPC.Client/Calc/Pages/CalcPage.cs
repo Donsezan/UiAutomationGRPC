@@ -4,62 +4,53 @@ using UiAutomationGRPC.Library.Elements;
 
 namespace UiAutomationGRPC.Client.Calc.Pages;
 
+/// <summary>
+/// Page Object for the main Calculator screen (Standard mode).
+/// Action methods enqueue work and return <c>this</c> for fluent chaining; the queue is flushed when a
+/// value-returning or page-transitioning method is awaited (see <see cref="BasePageObject{T}"/>).
+/// All locators are real Windows Calculator AutomationIds (verified live via GetAppStructure).
+/// </summary>
 public class CalcPage : BasePageObject<CalcPage>
-{    
+{
     private readonly CalcPageLocators _locators;
-    
+
     public CalcPage(UiAutomationDriver driver) : base(driver)
     {
-        _driver = driver;
         _locators = new CalcPageLocators(driver);
     }
 
-    /// <summary>
-    /// Waits for the page to be ready. Call after construction.
-    /// </summary>
+    /// <summary>Waits until the result display is present. Call right after construction.</summary>
     public Task<CalcPage> WaitForReady() =>
         ResolveAsync(async () => { await _locators.ResultText.WaitForElementExistAsync(); return this; });
 
-    public CalcPage ClickTwo()
-    {
-        Enqueue(() => _locators.ButtonTwo.ClickAsync());
-        return this;
-    }
+    public CalcPage ClickOne() { Enqueue(() => _locators.ButtonOne.ClickAsync()); return this; }
+    public CalcPage ClickTwo() { Enqueue(() => _locators.ButtonTwo.ClickAsync()); return this; }
+    public CalcPage ClickPlus() { Enqueue(() => _locators.ButtonPlus.ClickAsync()); return this; }
+    public CalcPage ClickEqual() { Enqueue(() => _locators.ButtonEqual.ClickAsync()); return this; }
 
-    public CalcPage ClickPlus()
-    {
-        Enqueue(() => _locators.ButtonPlus.ClickAsync());
-        return this;
-    }
-
-    public CalcPage ClickEqual()
-    {
-        Enqueue(() => _locators.ButtonEqual.ClickAsync());
-        return this;
-    }
-
+    /// <summary>Reads the result display, e.g. "Display is 4".</summary>
     public Task<string> GetResult() =>
         ResolveAsync(() => _locators.ResultText.NameAsync());
 
-    public Task<CalcNavigationPaget<CalcPage>> ClickNavigationButton() =>
-        ResolveAsync(async () => { await _locators.ResultText.NameAsync(); return new CalcNavigationPaget<CalcPage>(_driver, this); });
-
-    public CalcPage ClickResultText()
-    {
-        Enqueue(() => _locators.ResultText.ClickAsync());
-        return this;
-    }
+    /// <summary>Reads the mode header, e.g. "Standard Calculator mode" / "Scientific Calculator mode".</summary>
+    public Task<string> GetMode() =>
+        ResolveAsync(() => _locators.ModeHeader.NameAsync());
 
     /// <summary>
-    /// Sends a key using VirtualKeyboard.
+    /// Opens the hamburger navigation pane and transitions to <see cref="CalcNavigationPage"/>.
     /// </summary>
-    public CalcPage SendKey(string key)
-    {
-        Enqueue(() => Keyboard.SendKeyAsync(key));
-        return this;
-    }
+    public Task<CalcNavigationPage> OpenNavigation() =>
+        ResolveAsync(async () =>
+        {
+            await _locators.NavToggle.ClickAsync();
+            return await new CalcNavigationPage(_driver).WaitForReady();
+        });
 }
 
+/// <summary>
+/// Locators for the Calculator screen. Keeping *how to find* elements here (separate from *what to do*
+/// with them in <see cref="CalcPage"/>) is the core of the Page Object Model.
+/// </summary>
 public class CalcPageLocators
 {
     private readonly UiAutomationDriver _driver;
@@ -70,6 +61,7 @@ public class CalcPageLocators
 
     private Selector Window => new Selector(new PropertyConditions().NameProperty("Calculator"));
 
+    /// <summary>A descendant of the Calculator window matched by its AutomationId.</summary>
     private IAutomationElement E(string automationId) =>
         CreateElement(() => Window.Descendants(new PropertyConditions().AutomationIdProperty(automationId)));
 
@@ -78,5 +70,6 @@ public class CalcPageLocators
     public IAutomationElement ButtonPlus => E("plusButton");
     public IAutomationElement ButtonEqual => E("equalButton");
     public IAutomationElement ResultText => E("CalculatorResults");
-    public IAutomationElement NavigationButton => CreateElement(() => Window.Descendants().ControlType("Button").NameContain("Close Navigation"));
+    public IAutomationElement ModeHeader => E("Header");
+    public IAutomationElement NavToggle => E("TogglePaneButton");
 }
