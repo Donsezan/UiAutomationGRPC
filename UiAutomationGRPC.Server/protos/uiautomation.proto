@@ -128,15 +128,15 @@ enum ActionType {
     CLICK = 6; // Legacy: invokes via InvokePattern, falling back to a simulated left-click. Prefer INVOKE or LeftClick.
     Move = 7; // Move cursor
     MoveTo = 8; // Move cursor to element's clickable point
-    LeftClick = 9; // Simulated left click
-    RightClick = 10; // Simulated right click
+    LeftClick = 9; // Simulated left click. With no element (empty runtime_id) and arguments [x, y] clicks at those screen coordinates; otherwise clicks at the current cursor position.
+    RightClick = 10; // Simulated right click. With no element (empty runtime_id) and arguments [x, y] clicks at those screen coordinates; otherwise clicks at the current cursor position.
     LeftDown = 11; // Simulated left button down
     LeftUp = 12; // Simulated left button up
     RightDown = 13; // Simulated right button down
     RightUp = 14; // Simulated right button up
     MousWeelScroll = 15; // Simulated mouse wheel scroll, argument: delta
     MouseMiddleClick = 16; // Simulated middle click
-    DoubleClick = 17; // Simulated double click
+    DoubleClick = 17; // Simulated double click. With no element (empty runtime_id) requires arguments [x, y] — double-clicks at those screen coordinates.
 }
 
 message PerformActionResponse {

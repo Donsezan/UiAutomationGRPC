@@ -78,17 +78,83 @@ Clears the server-side element cache. Call without arguments to clear all, or sc
 ## Building
 
 ```powershell
-dotnet build
+dotnet build UiAutomationGRPC.AI/MCP/UiAutomationGRPC.LLM.csproj
 ```
 
-## Running
+The compiled binary lands at `UiAutomationGRPC.AI/MCP/bin/Debug/net8.0/UiAutomationGRPC.LLM.exe`.
+
+## Running manually
 
 ```powershell
-dotnet run
+dotnet run --project UiAutomationGRPC.AI/MCP
 ```
 
-Or configure your MCP client (like Claude Desktop) to run:
-`dotnet run --project <path_to_csproj>`
+## Connecting to Claude Code (VS Code extension or CLI)
+
+Claude Code reads project MCP servers from a `.mcp.json` file at the **workspace root** — not from `~/.claude/settings.json` (which does not accept `mcpServers`).
+
+### Step 1 — Build the binary
+
+```powershell
+dotnet build UiAutomationGRPC.AI/MCP/UiAutomationGRPC.LLM.csproj
+```
+
+> **Why use the pre-built `.exe` instead of `dotnet run`?**  
+> `dotnet run` triggers a NuGet package restore on every startup. If your global `NuGet.Config` contains any unreachable package source (e.g., a stale EAP feed), the restore times out after ~5 s — exceeding Claude Code's MCP handshake deadline before the server even starts. Pointing directly to the `.exe` skips restore entirely and starts the server in under 2 seconds.
+
+### Step 2 — Create `.mcp.json` at the workspace root
+
+A pre-created `.mcp.json` is already included in this repository. Its content:
+
+```json
+{
+  "mcpServers": {
+    "uiautomation": {
+      "command": "d:\\WorkPlace\\c#\\UiAutomationGRPC\\UiAutomationGRPC\\UiAutomationGRPC.AI\\MCP\\bin\\Debug\\net8.0\\UiAutomationGRPC.LLM.exe",
+      "env": {
+        "UIAUTOMATION_SERVER_ADDRESS": "http://localhost:50051",
+        "UIAUTOMATION_INSECURE_MODE": "true"
+      }
+    }
+  }
+}
+```
+
+Update the `command` path to match your own checkout location.
+
+### Step 3 — Approve the server in Claude Code
+
+1. Reload VS Code (or run **Developer: Reload Window**).
+2. Claude Code detects `.mcp.json` and shows a **trust prompt** — click **Allow**.
+3. The `uiautomation` server appears as connected. Verify with `/mcp` in the chat.
+
+> **Note:** After rebuilding the project, no config change is needed — Claude Code always invokes the same binary path.
+
+### Connecting to other MCP clients (Claude Desktop, Cursor, Windsurf)
+
+Configure your client to run either the pre-built binary or `dotnet run`:
+
+```json
+{
+  "mcpServers": {
+    "uiautomation": {
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--no-build",
+        "--project",
+        "<absolute_path_to>/UiAutomationGRPC.AI/MCP/UiAutomationGRPC.LLM.csproj"
+      ],
+      "env": {
+        "UIAUTOMATION_SERVER_ADDRESS": "http://localhost:50051",
+        "UIAUTOMATION_INSECURE_MODE": "true"
+      }
+    }
+  }
+}
+```
+
+Use `--no-build` to avoid NuGet restore delays (build separately first with `dotnet build`).
 
 ## Configuration
 

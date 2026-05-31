@@ -42,6 +42,21 @@ dotnet test UiAutomationGRPC.Server.Tests --filter "Name=SpecificTestMethod"
 
 Run the server **as Administrator** — UIA access to many target apps requires elevation. Most interactive behavior cannot be validated by unit tests alone; the tests only cover the access-control validators.
 
+## MCP server setup for Claude Code
+
+The MCP server is configured via `.mcp.json` at the repo root. On first open, Claude Code shows a trust prompt — click **Allow**. Verify with `/mcp` in chat.
+
+**Before the first use (or after any code change), build the binary:**
+
+```powershell
+dotnet build UiAutomationGRPC.AI/MCP/UiAutomationGRPC.LLM.csproj
+```
+
+The binary path in `.mcp.json` is absolute — update it if the repo is cloned to a different location.
+
+> **Why `.mcp.json` and not `settings.json`?** The VS Code extension reads project MCP servers from `.mcp.json`. The global `~/.claude/settings.json` does not accept `mcpServers`.  
+> **Why the `.exe` directly and not `dotnet run`?** `dotnet run` triggers NuGet restore on every startup. A stale package source in `NuGet.Config` can time out (~5 s), exceeding the MCP handshake deadline. Invoking the pre-built `.exe` starts the server in under 2 s.
+
 ## The proto is the contract — single source of truth
 
 There is now **one** canonical proto: `UiAutomationGRPC.Server/protos/uiautomation.proto` (compiled `GrpcServices="Server"`). The other projects reference that same file by relative path via their `.csproj` `<Protobuf>` items — there is no second copy to keep in sync:

@@ -127,10 +127,21 @@ namespace UiAutomationGRPC.Server.Handlers
                         VirtualMouse.MoveTo(x, y);
                         break;
                     case ActionType.LeftClick:
-                        VirtualMouse.LeftClick();
+                        if (TryGetXY(request, out int lx, out int ly))
+                            VirtualMouse.LeftClickAt(lx, ly);
+                        else
+                            VirtualMouse.LeftClick();
                         break;
                     case ActionType.RightClick:
-                        VirtualMouse.RightClick();
+                        if (TryGetXY(request, out int rx, out int ry))
+                            VirtualMouse.RightClickAt(rx, ry);
+                        else
+                            VirtualMouse.RightClick();
+                        break;
+                    case ActionType.DoubleClick:
+                        if (!TryGetXY(request, out int dx, out int dy))
+                            throw new ArgumentException("DoubleClick without an element requires x and y arguments.");
+                        VirtualMouse.DoubleClickAt(dx, dy);
                         break;
                     case ActionType.MouseMiddleClick:
                         VirtualMouse.MiddleClick();
@@ -206,6 +217,19 @@ namespace UiAutomationGRPC.Server.Handlers
             {
                 return new PerformActionResponse { Success = false, Message = $"Failed to send keys: {ex.Message}" };
             }
+        }
+
+        /// <summary>
+        /// Parses optional screen-coordinate arguments (x, y) from an element-free action request.
+        /// Returns false when fewer than two integer arguments are present, in which case the caller
+        /// falls back to clicking at the current cursor position.
+        /// </summary>
+        private static bool TryGetXY(PerformActionRequest request, out int x, out int y)
+        {
+            x = 0;
+            y = 0;
+            if (request.Arguments.Count < 2) return false;
+            return int.TryParse(request.Arguments[0], out x) && int.TryParse(request.Arguments[1], out y);
         }
 
         /// <summary>

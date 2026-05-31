@@ -231,11 +231,22 @@ var (success, message, processId) = await driver.OpenAppAsync("notepad");
 
 ### 3b. Use via MCP (AI Agents)
 
+**Build the MCP server binary first:**
+
 ```powershell
-dotnet run --project UiAutomationGRPC.AI/MCP
+dotnet build UiAutomationGRPC.AI/MCP/UiAutomationGRPC.LLM.csproj
 ```
 
-Then configure your MCP client (Claude Desktop, Antigravity, Cursor, Windsurf) to connect to the MCP server. The agent can immediately start the **See → Think → Act** loop.
+**Claude Code (VS Code extension):** a `.mcp.json` file is already present at the repo root. Reload VS Code and approve the `uiautomation` server when prompted.
+
+**Other MCP clients (Claude Desktop, Cursor, Windsurf):** configure your client to run:
+```powershell
+dotnet run --no-build --project UiAutomationGRPC.AI/MCP
+```
+
+The agent can immediately start the **See → Think → Act** loop.
+
+> See [MCP README](./UiAutomationGRPC.AI/MCP/README.md#connecting-to-claude-code-vs-code-extension-or-cli) for full setup details and troubleshooting.
 
 ---
 

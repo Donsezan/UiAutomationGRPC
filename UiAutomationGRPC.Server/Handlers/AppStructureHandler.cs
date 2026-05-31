@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
 using System.Windows.Automation;
@@ -69,6 +70,10 @@ namespace UiAutomationGRPC.Server.Handlers
                 }
 
                 AutomationElement rootMapElement = null;
+                // A non-Window top-level element (Pane/Menu) seen while searching. The MainWindowHandle
+                // heuristic can hand back a transient dropdown popup instead of the real window, so we
+                // only accept a real Window here and keep this as a last-resort fallback (see below).
+                AutomationElement popupFallback = null;
 
                 foreach (var p in processes)
                 {
@@ -77,19 +82,21 @@ namespace UiAutomationGRPC.Server.Handlers
                         p.Refresh();
                         if (p.HasExited) continue;
 
-                        // Strategy 1: MainWindowHandle
+                        // Strategy 1: MainWindowHandle — accept only a real Window control type.
                         if (p.MainWindowHandle != IntPtr.Zero)
                         {
                             try
                             {
                                 var candidate = AutomationElement.FromHandle(p.MainWindowHandle);
-                                if (candidate != null)
+                                if (candidate != null && !IsUwpSpacer(candidate))
                                 {
-                                    if (!IsUwpSpacer(candidate))
+                                    if (IsWindowControlType(candidate))
                                     {
                                         rootMapElement = candidate;
                                         break;
                                     }
+                                    // Popup/menu/pane grabbed by the heuristic — remember, keep looking.
+                                    popupFallback ??= candidate;
                                 }
                             }
                             catch (Exception ex)
@@ -98,18 +105,26 @@ namespace UiAutomationGRPC.Server.Handlers
                             }
                         }
 
-                        // Strategy 2: Search by PID
+                        // Strategy 2: Search this PID's top-level elements, preferring a real Window.
                         if (rootMapElement == null)
                         {
                             var condition = new PropertyCondition(AutomationElement.ProcessIdProperty, p.Id);
                             try
                             {
-                                var candidate = AutomationElement.RootElement.FindFirst(UiaTreeScope.Children, condition);
-                                if (candidate != null)
+                                var candidates = AutomationElement.RootElement.FindAll(UiaTreeScope.Children, condition);
+                                AutomationElement firstAny = null;
+                                foreach (AutomationElement c in candidates)
                                 {
-                                    rootMapElement = candidate;
-                                    break;
+                                    firstAny ??= c;
+                                    if (IsWindowControlType(c))
+                                    {
+                                        rootMapElement = c;
+                                        break;
+                                    }
                                 }
+                                if (rootMapElement != null) break;
+                                // No real Window for this PID — keep the first top-level as a fallback.
+                                if (firstAny != null) popupFallback ??= firstAny;
                             }
                             catch (Exception ex)
                             {
@@ -144,6 +159,13 @@ namespace UiAutomationGRPC.Server.Handlers
                         _logger.LogDebug(ex, "Failed to find window by name '{AppName}'", request.AppName);
                     }
                 }
+
+                // Safety net: no real top-level Window matched. If a non-Window candidate was seen
+                // (a popup-only process, a context-menu host, or an app whose real window is a Pane,
+                // e.g. Electron/Chromium shells), return it rather than failing — that is legitimately
+                // all this process exposes.
+                if (rootMapElement == null && popupFallback != null)
+                    rootMapElement = popupFallback;
 
                 if (rootMapElement == null)
                     return new AppStructureResponse { Success = false, Message = "Main window element not found." };
@@ -204,6 +226,14 @@ namespace UiAutomationGRPC.Server.Handlers
             catch (OperationCanceledException)
             {
                 throw new RpcException(new Status(StatusCode.Cancelled, "PerformActionWithStructure cancelled by client."));
+            }
+            catch (Exception ex) when (ex is ElementNotAvailableException || ex is COMException)
+            {
+                // The action itself already succeeded (we only reach here after actionResult.Success).
+                // The target element/window then went away before we could read the refreshed tree —
+                // e.g. invoking a window's Close button. That is a successful action, not a failure:
+                // report success with a null tree instead of surfacing the COM/UIA exception as an RPC error.
+                return new AppStructureResponse { Success = true, Message = "Action succeeded; process exited during response." };
             }
 
             return new AppStructureResponse { Success = true, Message = "Action performed but could not rebuild structure (root not found)." };
@@ -405,6 +435,23 @@ namespace UiAutomationGRPC.Server.Handlers
             public CancellationToken Ct;
             public int Emitted;
             public bool Truncated;
+        }
+
+        /// <summary>
+        /// True when the element's control type is <see cref="ControlType.Window"/> — i.e. a real
+        /// top-level application window rather than a transient popup/menu/pane.
+        /// </summary>
+        private static bool IsWindowControlType(AutomationElement element)
+        {
+            try
+            {
+                return Equals(element.Current.ControlType, ControlType.Window);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.WriteLine($"[AppStructureHandler] ControlType check failed: {ex.Message}");
+                return false;
+            }
         }
 
         private static bool IsUwpSpacer(AutomationElement element)
