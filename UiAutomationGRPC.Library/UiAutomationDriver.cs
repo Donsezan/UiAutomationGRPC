@@ -156,6 +156,12 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// <param name="appName">The name or path of the application.</param>
     /// <param name="arguments">The arguments to pass to the application.</param>
     /// <returns>A tuple containing success status, message, and process ID.</returns>
+    /// <remarks>
+    /// For UWP/Store apps (e.g. <c>calc</c>) the returned <c>ProcessId</c> may be a host/launcher
+    /// PID rather than the one that owns the window, so it may not work with the PID-based
+    /// <see cref="GetAppStructureAsync"/>/screenshot calls. Prefer <see cref="GetAppStructureAsync"/>
+    /// by app name for UWP apps. Classic Win32 apps return the correct PID.
+    /// </remarks>
     public async Task<(bool Success, string Message, int ProcessId)> OpenAppAsync(string appName, string arguments = "")
     {
         var response = await Client.OpenAppAsync(new AppRequest { AppName = appName, Arguments = arguments });
@@ -238,14 +244,23 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
-    /// Sends keys to the active application.
+    /// Sends keys to the active application, optionally focusing a target element first.
     /// </summary>
     /// <param name="keys">The keys to send.</param>
     /// <param name="wait">Whether to wait for processing.</param>
+    /// <param name="runtimeId">
+    /// Optional RuntimeId of an element to focus before sending. When supplied, the server focuses
+    /// that element first so the keys land on a specific control instead of whatever currently has
+    /// focus. When null/empty, keys go to the currently focused window (legacy behavior).
+    /// </param>
     /// <returns>A tuple containing success status and message.</returns>
-    public async Task<(bool Success, string Message)> SendKeysAsync(string keys, bool wait = true)
+    public async Task<(bool Success, string Message)> SendKeysAsync(string keys, bool wait = true, string? runtimeId = null)
     {
-        var response = await Client.SendKeysAsync(new SendKeysRequest { Keys = keys, Wait = wait });
+        var request = new SendKeysRequest { Keys = keys, Wait = wait };
+        if (!string.IsNullOrEmpty(runtimeId))
+            request.RuntimeId = runtimeId;
+
+        var response = await Client.SendKeysAsync(request);
         return (response.Success, response.Message);
     }
 

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Security.Cryptography.X509Certificates;
@@ -24,14 +25,55 @@ public class Program
         var certPassword = builder.Configuration.GetValue<string>("Security:CertificatePassword") ?? "";
         var tokenAuthEnabled = builder.Configuration.GetValue<bool>("Security:TokenAuthEnabled");
 
+        // Bind to loopback (127.0.0.1) by default — this service can launch/kill processes and
+        // synthesize input, so it must not be reachable from other hosts unless explicitly opted in.
+        // Set Security:AllowRemote=true to listen on all interfaces (0.0.0.0).
+        var allowRemote = builder.Configuration.GetValue<bool>("Security:AllowRemote");
+        var bindAddress = allowRemote ? IPAddress.Any : IPAddress.Loopback;
+        var bindHost = allowRemote ? "0.0.0.0" : "127.0.0.1";
+
+        // Fail-closed warning: token auth with no configured tokens rejects every request.
+        if (tokenAuthEnabled)
+        {
+            var validTokenCount = builder.Configuration.GetSection("Security:ValidTokens").Get<string[]>()?.Length ?? 0;
+            if (validTokenCount == 0)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("[Config] WARNING: TokenAuthEnabled=true but Security:ValidTokens is empty — ALL requests will be rejected as Unauthenticated.");
+                Console.ResetColor();
+            }
+            else
+            {
+                Console.WriteLine($"[Config] Token Auth: Enabled with {validTokenCount} valid token(s)");
+            }
+        }
+
         // Read feature flags
-        // Cache:Enabled defaults to true — set to false for dynamic apps where fresh tree parsing is required.
+        // Cache:Enabled defaults to true — selects the RuntimeId resolution strategy, NOT property freshness.
+        // RuntimeId addressing works in BOTH modes: enabled reuses element handles (re-finding stale
+        // ones); disabled re-resolves every element from the live tree per access (slower). Enabled is
+        // recommended even for dynamic UIs since it already re-finds obsolete elements automatically.
         UiAutomationGRPC.Server.Helpers.ElementCache.Enabled =
             builder.Configuration.GetValue("Features:Cache:Enabled", defaultValue: true);
 
         Console.WriteLine(UiAutomationGRPC.Server.Helpers.ElementCache.Enabled
-            ? "[Config] Cache: Enabled"
-            : "[Config] Cache: DISABLED \u2014 every request will parse the live UI tree");
+            ? "[Config] Cache: Enabled (persisted element handles reused, re-found if stale)"
+            : "[Config] Cache: DISABLED \u2014 every request re-resolves elements from the live UI tree");
+
+        // Single serialized UI Automation worker. All UIA/input RPCs are marshalled onto
+        // one dedicated MTA thread so concurrent clients can't fight over the mouse/keyboard
+        // or race the element cache. The queue depth caps backlog before ResourceExhausted.
+        var maxQueuedRequests = builder.Configuration.GetValue("Features:MaxQueuedRequests", defaultValue: 32);
+        builder.Services.AddSingleton(_ => new UiaExecutor(maxQueuedRequests));
+        Console.WriteLine($"[Config] UIA worker: single dedicated MTA thread, max queue depth {maxQueuedRequests}");
+
+        // App-structure tree tuning (GetAppStructure / PerformActionWithStructure — the LLM hot path).
+        var appStructureOptions = new AppStructureOptions();
+        builder.Configuration.GetSection("Features:AppStructure").Bind(appStructureOptions);
+        builder.Services.AddSingleton(appStructureOptions);
+        Console.WriteLine(
+            $"[Config] AppStructure: maxDepth {appStructureOptions.MaxDepth}, maxNodes {appStructureOptions.MaxNodes}, " +
+            $"includeOffscreen {appStructureOptions.IncludeOffscreen}, compactJson {appStructureOptions.CompactJson}");
 
         // Bind WhiteList / BlackList application access control
         var appAccessConfig = new AppAccessConfig();
@@ -84,13 +126,15 @@ public class Program
                 if (!string.IsNullOrEmpty(certPath) && File.Exists(certPath))
                 {
                     var cert = new X509Certificate2(certPath, certPassword);
-                    options.Listen(IPAddress.Any, port, listenOptions =>
+                    options.Listen(bindAddress, port, listenOptions =>
                     {
                         listenOptions.Protocols = HttpProtocols.Http2;
                         listenOptions.UseHttps(cert);
                     });
                     Console.WriteLine($"╔══════════════════════════════════════════════════════════════════╗");
-                    Console.WriteLine($"║  ✓ SECURE MODE: gRPC Server listening on https://0.0.0.0:{port}  ");
+                    Console.WriteLine($"║  ✓ SECURE MODE: gRPC Server listening on https://{bindHost}:{port}  ");
+                    if (allowRemote)
+                        Console.WriteLine($"║  ⚠ AllowRemote=true — reachable from other hosts on all interfaces ");
                     Console.WriteLine($"╚══════════════════════════════════════════════════════════════════╝");
                 }
                 else
@@ -107,16 +151,18 @@ public class Program
             else
             {
                 // HTTP mode - insecure with warning
-                options.Listen(IPAddress.Any, port, listenOptions =>
+                options.Listen(bindAddress, port, listenOptions =>
                 {
                     listenOptions.Protocols = HttpProtocols.Http2;
                 });
-                
+
                 Console.ForegroundColor = ConsoleColor.Yellow;
                 Console.WriteLine($"╔═══════════════════════════════════════════════════════════════╗");
                 Console.WriteLine($"║  !! WARNING: INSECURE MODE - CONNECTION IS NOT ENCRYPTED !!  ║");
                 Console.WriteLine($"║  This mode should only be used for development/testing.      ║");
-                Console.WriteLine($"║  gRPC Server listening on http://0.0.0.0:{port,-22}          ");
+                Console.WriteLine($"║  gRPC Server listening on http://{bindHost}:{port,-22}          ");
+                if (allowRemote)
+                    Console.WriteLine($"║  ⚠ AllowRemote=true — reachable from other hosts!           ");
                 Console.WriteLine($"╚═══════════════════════════════════════════════════════════════╝");
                 Console.ResetColor();
             }
@@ -141,10 +187,61 @@ public class Program
 
         var app = builder.Build();
 
+        // Session 0 / interactive-desktop check. A Windows Service runs in Session 0, which has no
+        // access to the interactive user desktop — UIA queries and synthesized mouse/keyboard input
+        // would silently target an empty/wrong desktop. Only a process in the user's interactive
+        // session can actually drive their apps. We can't fix that from inside the process, so detect
+        // it and warn loudly (Event Log when running as a service, console otherwise).
+        WarnIfNonInteractiveSession(app.Logger);
+
         // Map gRPC service
         app.MapGrpcService<UiAutomationService>();
         app.MapGrpcReflectionService();
 
         app.Run();
+    }
+
+    /// <summary>
+    /// Detects whether the server is running in a non-interactive context (Session 0, the Windows
+    /// Service session) and, if so, emits a hard warning. In Session 0 the process cannot see or
+    /// drive the interactive user desktop, so UIA reads and synthesized input will not reach the
+    /// user's apps. The supported way to run "as a service" is to launch in the user's interactive
+    /// session (e.g. a Scheduled Task triggered at logon, or running under the interactive account).
+    /// </summary>
+    private static void WarnIfNonInteractiveSession(ILogger logger)
+    {
+        int sessionId;
+        try
+        {
+            sessionId = Process.GetCurrentProcess().SessionId;
+        }
+        catch
+        {
+            sessionId = -1; // SessionId unavailable; fall back to UserInteractive alone.
+        }
+
+        // Session 0 is the isolated service session. Environment.UserInteractive is false for a
+        // service host. Either signal means input/UIA will not reach the interactive desktop.
+        var nonInteractive = sessionId == 0 || !Environment.UserInteractive;
+        if (!nonInteractive)
+            return;
+
+        const string warning =
+            "Server is running in a NON-INTERACTIVE session (Session 0 / Windows Service). " +
+            "It CANNOT see or drive the interactive user desktop — UIA queries and synthesized " +
+            "mouse/keyboard input will target an empty/wrong desktop and most automation will " +
+            "silently fail. Run the server in the user's interactive session instead (e.g. a " +
+            "Scheduled Task triggered at logon, or under the interactive user account).";
+
+        logger.LogWarning("{Warning} (SessionId={SessionId}, UserInteractive={UserInteractive})",
+            warning, sessionId, Environment.UserInteractive);
+
+        if (Environment.UserInteractive)
+        {
+            var prev = Console.ForegroundColor;
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"[Session] WARNING: {warning}");
+            Console.ForegroundColor = prev;
+        }
     }
 }

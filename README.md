@@ -6,8 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/Donsezan/UiAutomationGRPC/actions"><img src="https://github.com/Donsezan/UiAutomationGRPC/actions/workflows/dotnet-desktop.yml/badge.svg" alt="Build Status" /></a>
-  <img src="https://img.shields.io/badge/.NET_Framework-4.7.2-512BD4?logo=dotnet" alt=".NET Framework" />
-  <img src="https://img.shields.io/badge/.NET-6.0+-512BD4?logo=dotnet" alt=".NET 6+" />
+  <img src="https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet" alt=".NET 8" />
   <img src="https://img.shields.io/badge/Platform-Windows-0078D4?logo=windows" alt="Windows" />
   <img src="https://img.shields.io/badge/Protocol-gRPC-244C5A?logo=grpc" alt="gRPC" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-D22128" alt="License" /></a>
@@ -22,7 +21,7 @@
 - **Language Agnostic** — any language with a gRPC client can automate Windows apps
 - **MCP Server** — plug-and-play integration with Model Context Protocol clients
 - **Full UI Control** — click, type, scroll, screenshot, read properties, navigate trees
-- **Enterprise Security** — TLS encryption, Bearer-token authentication, rate limiting, app whitelist/blacklist
+- **Layered Security** — TLS encryption, Bearer-token authentication, app + interaction whitelist/blacklist, key-input filtering
 - **Element Caching** — live-validated cache with scoped invalidation by process or app name
 
 ---
@@ -133,7 +132,7 @@ graph TD
     end
 
     subgraph SDK
-        Library["UiAutomationGRPC.Library<br/>.NET 6+ SDK"]
+        Library["UiAutomationGRPC.Library<br/>.NET 8 SDK"]
         MCP["MCP Server<br/>.NET 8"]
         Skill["Skill<br/>gRPCurl"]
     end
@@ -141,7 +140,7 @@ graph TD
     Script --> Library
     LLM --> MCP
     LLM --> Skill
-    Library -->|gRPC| Server["UiAutomationGRPC.Server<br/>.NET Framework 4.7.2"]
+    Library -->|gRPC| Server["UiAutomationGRPC.Server<br/>.NET 8 (Windows)"]
     MCP -->|gRPC| Server
     Skill -->|gRPC| Server
     Server -->|Windows UIA| Target["🖥️ Target Application"]
@@ -161,10 +160,10 @@ graph TD
 
 | Component | Description | Target |
 |-----------|-------------|--------|
-| [**UiAutomationGRPC.Server**](./UiAutomationGRPC.Server) | Core gRPC service — exposes Windows UI Automation over the network | .NET Framework 4.7.2 |
-| [**UiAutomationGRPC.Library**](./UiAutomationGRPC.Library) | .NET client SDK — `UiAutomationDriver`, `VirtualMouse`, `VirtualKeyboard` | .NET 6.0+ |
-| [**UiAutomationGRPC.AI**](./UiAutomationGRPC.AI) | AI integration — MCP Server + Skill definitions for LLM agents | .NET 8 |
-| [**UiAutomationGRPC.Client**](./UiAutomationGRPC.Client) | Sample console app — Calculator automation reference implementation | .NET 6.0+ |
+| [**UiAutomationGRPC.Server**](./UiAutomationGRPC.Server) | Core gRPC service — exposes Windows UI Automation over the network | `net8.0-windows` |
+| [**UiAutomationGRPC.Library**](./UiAutomationGRPC.Library) | .NET client SDK — `UiAutomationDriver`, `VirtualMouse`, `VirtualKeyboard` | `net8.0-windows` |
+| [**UiAutomationGRPC.AI**](./UiAutomationGRPC.AI) | AI integration — MCP Server + Skill definitions for LLM agents | `net8.0` |
+| [**UiAutomationGRPC.Client**](./UiAutomationGRPC.Client) | Sample console app — Calculator automation reference implementation | `net8.0-windows` |
 
 
 ### Two Automation Approaches
@@ -178,21 +177,29 @@ graph TD
 
 ### Available Actions
 
+UI Automation pattern actions (require an element `RuntimeId`):
+
 | Action | Description |
 |--------|-------------|
-| `Invoke` | Click / activate |
+| `Invoke` | Click / activate via the UIA InvokePattern |
 | `Toggle` | Checkboxes, switches |
 | `SetValue` | Set text in input fields |
 | `Select` | Select list items |
 | `SetFocus` | Focus an element |
-| `ExpandCollapse` | Expand / collapse tree nodes, menus |
-| `LeftClick` / `RightClick` / `DoubleClick` | Simulated mouse clicks |
-| `MoveTo` | Move mouse to element center |
-| `MouseMoveAbs` / `MouseMoveRel` | Absolute / relative mouse movement |
-| `MouseClickAt` | Click at screen coordinates |
-| `SendKeys` | Send keyboard input |
-| `SendKeyCombination` | Send key combinations (e.g., `Ctrl+S`) |
-| `TakeScreenshot` | Capture screen or window |
+| `ExpandCollapse` | Expand / collapse tree nodes, menus (pass `collapse` to collapse) |
+| `LeftClick` / `RightClick` / `DoubleClick` | Simulated mouse click at the element's clickable point |
+| `MoveTo` | Move the cursor to the element's center |
+
+Simulated input actions (no element required — driven by `VirtualMouse` / `VirtualKeyboard`):
+
+| Action | Description |
+|--------|-------------|
+| `Move` | Move the cursor to absolute screen coordinates |
+| `LeftClick` / `RightClick` / `MouseMiddleClick` | Click at the current cursor position |
+| `LeftDown` / `LeftUp` / `RightDown` / `RightUp` | Press / release a mouse button |
+| `MousWeelScroll` | Scroll the mouse wheel |
+
+Separate RPCs cover `SendKeys` (keyboard input, including modifier combinations like `^s`) and `TakeScreenshot` (capture an element or window).
 
 ---
 
@@ -202,8 +209,8 @@ graph TD
 
 | Component | Requirement |
 |-----------|-------------|
-| **Server** | Windows, .NET Framework 4.7.2, Administrator privileges |
-| **Library** | .NET 6.0+ |
+| **Server** | Windows, .NET 8 SDK, Administrator privileges |
+| **Library** | .NET 8 (Windows) |
 | **MCP** | .NET 8 SDK |
 
 ### 2. Start the Server
@@ -224,11 +231,22 @@ var (success, message, processId) = await driver.OpenAppAsync("notepad");
 
 ### 3b. Use via MCP (AI Agents)
 
+**Build the MCP server binary first:**
+
 ```powershell
-dotnet run --project UiAutomationGRPC.AI/MCP
+dotnet build UiAutomationGRPC.AI/MCP/UiAutomationGRPC.LLM.csproj
 ```
 
-Then configure your MCP client (Claude Desktop, Antigravity, Cursor, Windsurf) to connect to the MCP server. The agent can immediately start the **See → Think → Act** loop.
+**Claude Code (VS Code extension):** a `.mcp.json` file is already present at the repo root. Reload VS Code and approve the `uiautomation` server when prompted.
+
+**Other MCP clients (Claude Desktop, Cursor, Windsurf):** configure your client to run:
+```powershell
+dotnet run --no-build --project UiAutomationGRPC.AI/MCP
+```
+
+The agent can immediately start the **See → Think → Act** loop.
+
+> See [MCP README](./UiAutomationGRPC.AI/MCP/README.md#connecting-to-claude-code-vs-code-extension-or-cli) for full setup details and troubleshooting.
 
 ---
 
@@ -250,9 +268,10 @@ await using var driver = new UiAutomationDriver("http://127.0.0.1:50051", insecu
 await using var driver = new UiAutomationDriver("https://127.0.0.1:50051", authToken: "your-token");
 ```
 
-Additional security features:
-- **Rate Limiting** — configurable per-second, per-minute, and concurrent connection limits
-- **App Whitelist / Blacklist** — restrict which applications the server can launch
+Additional access controls (all configured in `appsettings.json`):
+- **App Whitelist / Blacklist** — restrict which applications `OpenApp` can launch (with per-app argument filtering).
+- **Interaction restrictions** — gate element interactions, structure reads, and process termination against the same allow/deny lists.
+- **Key-input filtering** — whitelist/blacklist what `SendKeys` may send.
 
 > See [Server README](./UiAutomationGRPC.Server/README.md#security) for full configuration details.
 

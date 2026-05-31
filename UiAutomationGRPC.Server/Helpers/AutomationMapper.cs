@@ -129,12 +129,14 @@ namespace UiAutomationGRPC.Server.Helpers
                     AutomationId = element.Current.AutomationId ?? "",
                     ClassName = element.Current.ClassName ?? "",
                     ControlType = element.Current.ControlType.ProgrammaticName,
-                    RuntimeId = runtimeId
+                    RuntimeId = runtimeId,
+                    Success = true,
+                    Message = "Element found."
                 };
             }
             catch (ElementNotAvailableException)
             {
-                return new ElementResponse { Name = "ElementNotAvailable" };
+                return new ElementResponse { Success = false, Message = "Element is no longer available." };
             }
         }
     }

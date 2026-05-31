@@ -14,14 +14,28 @@ namespace UiAutomationGRPC.Server.Handlers
         private const int ProcessExitTimeoutMs = 5000;
 
         private readonly AppAccessValidator? _validator;
+        private readonly InteractionAccessGuard? _guard;
         private readonly ILogger<AppLifecycleHandler> _logger;
 
-        public AppLifecycleHandler(ILogger<AppLifecycleHandler> logger, AppAccessValidator? validator = null)
+        public AppLifecycleHandler(ILogger<AppLifecycleHandler> logger, AppAccessValidator? validator = null, InteractionAccessGuard? guard = null)
         {
             _logger = logger;
             _validator = validator;
+            _guard = guard;
         }
 
+        /// <summary>
+        /// Launches an application and returns its process ID.
+        /// </summary>
+        /// <remarks>
+        /// <para><b>UWP / Store apps:</b> for packaged apps launched via an alias (e.g. <c>calc</c>,
+        /// which resolves to <c>CalculatorApp</c>), Windows starts the app through a host/launcher
+        /// process and <see cref="System.Diagnostics.Process.Start(System.Diagnostics.ProcessStartInfo)"/>
+        /// returns that launcher's PID — not the PID that owns the visible window. As a result the
+        /// returned <c>ProcessId</c> may not be usable with <c>GetAppStructure</c>/<c>TakeScreenshot</c>
+        /// by PID. For UWP apps prefer calling <c>GetAppStructure</c> by <c>app_name</c>, which resolves
+        /// the real top-level window. Classic Win32 apps return the correct PID.</para>
+        /// </remarks>
         public Task<OpenAppResponse> OpenApp(AppRequest request, ServerCallContext context)
         {
             _logger.LogInformation("OpenApp requested: AppName='{AppName}', Arguments='{Arguments}'",
@@ -72,7 +86,11 @@ namespace UiAutomationGRPC.Server.Handlers
 
             try
             {
-                var processes = Process.GetProcessesByName(request.AppName);
+                // GetProcessesByName expects a name without extension — strip ".exe"
+                // so callers can pass either "notepad" or "notepad.exe" consistently
+                // with GetAppStructure / ClearByName.
+                string processName = ElementCache.StripExeExtension(request.AppName);
+                var processes = Process.GetProcessesByName(processName);
                 _logger.LogInformation("CloseApp: Found {Count} process(es) for '{AppName}'",
                     processes.Length, request.AppName);
 
@@ -84,6 +102,17 @@ namespace UiAutomationGRPC.Server.Handlers
                     try
                     {
                         int pid = p.Id;
+
+                        // Respect interaction restrictions — terminating a process is an
+                        // interaction and must obey the same WhiteList / BlackList policy.
+                        var blocked = InteractionAccessGuard.CheckAccess(_guard, pid);
+                        if (blocked != null)
+                        {
+                            _logger.LogWarning("CloseApp: BLOCKED process {ProcessId}: {Reason}", pid, blocked);
+                            exceptions.Add($"PID {pid}: {blocked}");
+                            continue;
+                        }
+
                         p.Kill();
                         if (!p.WaitForExit(ProcessExitTimeoutMs))
                         {
@@ -130,6 +159,15 @@ namespace UiAutomationGRPC.Server.Handlers
 
             try
             {
+                // Respect interaction restrictions — terminating a process must obey
+                // the same WhiteList / BlackList policy as other interactions.
+                var blocked = InteractionAccessGuard.CheckAccess(_guard, request.ProcessId);
+                if (blocked != null)
+                {
+                    _logger.LogWarning("CloseAppByProcessId: BLOCKED PID={ProcessId}: {Reason}", request.ProcessId, blocked);
+                    return Task.FromResult(new PerformActionResponse { Success = false, Message = blocked });
+                }
+
                 var process = Process.GetProcessById(request.ProcessId);
                 process.Kill();
                 if (!process.WaitForExit(ProcessExitTimeoutMs))

@@ -20,7 +20,7 @@ namespace UiAutomationGRPC.Server.Handlers
             _guard = guard;
         }
 
-        public Task<PerformActionResponse> PerformAction(PerformActionRequest request, ServerCallContext context)
+        public PerformActionResponse PerformAction(PerformActionRequest request, ServerCallContext context)
         {
             // If RuntimeId is empty, we handle global/mouse actions that don't require an element.
             if (string.IsNullOrEmpty(request.RuntimeId))
@@ -30,13 +30,13 @@ namespace UiAutomationGRPC.Server.Handlers
 
             if (!ElementCache.TryGetLive(request.RuntimeId, out var element))
             {
-                throw new Grpc.Core.RpcException(new Grpc.Core.Status(Grpc.Core.StatusCode.NotFound, "Element not found in cache."));
+                return new PerformActionResponse { Success = false, Message = "Element not found in cache." };
             }
 
             // Validate interaction access against the owning process
             var blocked = InteractionAccessGuard.CheckAccess(_guard, element.Current.ProcessId);
             if (blocked != null)
-                return Task.FromResult(new PerformActionResponse { Success = false, Message = blocked });
+                return new PerformActionResponse { Success = false, Message = blocked };
 
             try
             {
@@ -50,12 +50,10 @@ namespace UiAutomationGRPC.Server.Handlers
                         break;
                     case ActionType.ExpandCollapse:
                         var ecPattern = AutomationMapper.GetPattern<ExpandCollapsePattern>(element, ExpandCollapsePattern.Pattern);
-                        if (request.Arguments.Count > 0 && request.Arguments[0].ToLower() == "expand")
-                            ecPattern.Expand();
-                        else if (request.Arguments.Count > 0 && request.Arguments[0].ToLower() == "collapse")
+                        if (request.Arguments.Count > 0 && string.Equals(request.Arguments[0], "collapse", StringComparison.OrdinalIgnoreCase))
                             ecPattern.Collapse();
-                        else 
-                            ecPattern.Expand(); 
+                        else
+                            ecPattern.Expand();
                         break;
                     case ActionType.SetValue:
                         if (request.Arguments.Count == 0) throw new ArgumentException("SetValue requires an argument.");
@@ -68,13 +66,15 @@ namespace UiAutomationGRPC.Server.Handlers
                         element.SetFocus();
                         break;
                     case ActionType.Click:
+                        // Legacy action: prefer InvokePattern, fall back to a simulated
+                        // left-click for elements that don't support Invoke.
                         if (element.TryGetCurrentPattern(InvokePattern.Pattern, out object invPat))
                         {
                             ((InvokePattern)invPat).Invoke();
                         }
-                        else
+                        else if (!ClickElementAtCenter(element))
                         {
-                            throw new NotSupportedException("Click not fully implemented without P/Invoke. Using InvokePattern is recommended.");
+                            throw new InvalidOperationException("Element does not support InvokePattern and no clickable point could be resolved.");
                         }
                         break;
                     case ActionType.MoveTo:                        
@@ -87,23 +87,26 @@ namespace UiAutomationGRPC.Server.Handlers
                         }
                         break;
                     case ActionType.LeftClick:
-                        ClickElementAtCenter(element);
+                        if (!ClickElementAtCenter(element))
+                            throw new InvalidOperationException("Could not determine a clickable point for the element.");
                         break;
                     case ActionType.RightClick:
-                        ClickElementAtCenter(element, rightClick: true);
+                        if (!ClickElementAtCenter(element, rightClick: true))
+                            throw new InvalidOperationException("Could not determine a clickable point for the element.");
                         break;
                     case ActionType.DoubleClick:
-                        DoubleClickElementAtCenter(element);
+                        if (!DoubleClickElementAtCenter(element))
+                            throw new InvalidOperationException("Could not determine a clickable point for the element.");
                         break;
                     default:
                         throw new NotSupportedException($"Action {request.Action} is not supported on an element.");
                 }
 
-                return Task.FromResult(new PerformActionResponse { Success = true, Message = "Action performed successfully." });
+                return new PerformActionResponse { Success = true, Message = "Action performed successfully." };
             }
             catch (Exception ex)
             {
-                return Task.FromResult(new PerformActionResponse { Success = false, Message = $"Error performing action: {ex.Message}" });
+                return new PerformActionResponse { Success = false, Message = $"Error performing action: {ex.Message}" };
             }
         }
 
@@ -111,7 +114,7 @@ namespace UiAutomationGRPC.Server.Handlers
         /// Handles global mouse actions that don't require an element context.
         /// All mouse operations are delegated to VirtualMouse helper.
         /// </summary>
-        public Task<PerformActionResponse> HandleGlobalAction(PerformActionRequest request)
+        public PerformActionResponse HandleGlobalAction(PerformActionRequest request)
         {
             try
             {
@@ -124,10 +127,21 @@ namespace UiAutomationGRPC.Server.Handlers
                         VirtualMouse.MoveTo(x, y);
                         break;
                     case ActionType.LeftClick:
-                        VirtualMouse.LeftClick();
+                        if (TryGetXY(request, out int lx, out int ly))
+                            VirtualMouse.LeftClickAt(lx, ly);
+                        else
+                            VirtualMouse.LeftClick();
                         break;
                     case ActionType.RightClick:
-                        VirtualMouse.RightClick();
+                        if (TryGetXY(request, out int rx, out int ry))
+                            VirtualMouse.RightClickAt(rx, ry);
+                        else
+                            VirtualMouse.RightClick();
+                        break;
+                    case ActionType.DoubleClick:
+                        if (!TryGetXY(request, out int dx, out int dy))
+                            throw new ArgumentException("DoubleClick without an element requires x and y arguments.");
+                        VirtualMouse.DoubleClickAt(dx, dy);
                         break;
                     case ActionType.MouseMiddleClick:
                         VirtualMouse.MiddleClick();
@@ -152,18 +166,18 @@ namespace UiAutomationGRPC.Server.Handlers
                     default:
                         throw new NotSupportedException($"Global Action {request.Action} is not supported.");
                 }
-                return Task.FromResult(new PerformActionResponse { Success = true, Message = "Global action performed." });
+                return new PerformActionResponse { Success = true, Message = "Global action performed." };
             }
             catch (Exception ex)
             {
-                return Task.FromResult(new PerformActionResponse { Success = false, Message = $"Error performing global action: {ex.Message}" });
+                return new PerformActionResponse { Success = false, Message = $"Error performing global action: {ex.Message}" };
             }
         }
 
         /// <summary>
         /// Sends keyboard input using VirtualKeyboard helper.
         /// </summary>
-        public Task<PerformActionResponse> SendKeys(SendKeysRequest request, ServerCallContext context)
+        public PerformActionResponse SendKeys(SendKeysRequest request, ServerCallContext context)
         {
             try
             {
@@ -171,49 +185,88 @@ namespace UiAutomationGRPC.Server.Handlers
                 {
                     var (allowed, reason) = _keyValidator.Validate(request.Keys);
                     if (!allowed)
-                        return Task.FromResult(new PerformActionResponse { Success = false, Message = reason });
+                        return new PerformActionResponse { Success = false, Message = reason };
+                }
+
+                // Optional targeting: focus the requested element before sending so keys land on a
+                // specific control rather than whatever happens to hold focus. Without it, SendKeys
+                // posts to the focused window of the server's session (the #3 "no target" problem).
+                if (!string.IsNullOrEmpty(request.RuntimeId))
+                {
+                    if (!ElementCache.TryGetLive(request.RuntimeId, out var target))
+                        return new PerformActionResponse { Success = false, Message = "Element not found in cache." };
+
+                    var blocked = InteractionAccessGuard.CheckAccess(_guard, target.Current.ProcessId);
+                    if (blocked != null)
+                        return new PerformActionResponse { Success = false, Message = blocked };
+
+                    try
+                    {
+                        target.SetFocus();
+                    }
+                    catch (Exception ex)
+                    {
+                        return new PerformActionResponse { Success = false, Message = $"Could not focus target element before sending keys: {ex.Message}" };
+                    }
                 }
 
                 VirtualKeyboard.Send(request.Keys, request.Wait);
-                return Task.FromResult(new PerformActionResponse { Success = true, Message = "Keys sent" });
+                return new PerformActionResponse { Success = true, Message = "Keys sent" };
             }
             catch (Exception ex)
             {
-                return Task.FromResult(new PerformActionResponse { Success = false, Message = $"Failed to send keys: {ex.Message}" });
+                return new PerformActionResponse { Success = false, Message = $"Failed to send keys: {ex.Message}" };
             }
+        }
+
+        /// <summary>
+        /// Parses optional screen-coordinate arguments (x, y) from an element-free action request.
+        /// Returns false when fewer than two integer arguments are present, in which case the caller
+        /// falls back to clicking at the current cursor position.
+        /// </summary>
+        private static bool TryGetXY(PerformActionRequest request, out int x, out int y)
+        {
+            x = 0;
+            y = 0;
+            if (request.Arguments.Count < 2) return false;
+            return int.TryParse(request.Arguments[0], out x) && int.TryParse(request.Arguments[1], out y);
         }
 
         /// <summary>
         /// Clicks at the center of an element using VirtualMouse.
+        /// Returns false when no clickable point could be resolved (the click did not happen).
         /// </summary>
-        public static void ClickElementAtCenter(AutomationElement element, bool rightClick = false)
+        public static bool ClickElementAtCenter(AutomationElement element, bool rightClick = false)
         {
             try { element.SetFocus(); } catch (Exception ex) { System.Diagnostics.Trace.WriteLine($"[ActionHandler] SetFocus failed (non-fatal): {ex.Message}"); }
 
-            if (TryGetClickablePoint(element, out Point pt))
+            if (!TryGetClickablePoint(element, out Point pt))
+                return false;
+
+            VirtualMouse.MoveTo(pt.X, pt.Y);
+            Thread.Sleep(100);
+            if (rightClick)
             {
-                VirtualMouse.MoveTo(pt.X, pt.Y);
-                Thread.Sleep(100);
-                if (rightClick)
-                {
-                    VirtualMouse.RightClick();
-                }
-                else
-                {
-                    VirtualMouse.LeftClick();
-                }
+                VirtualMouse.RightClick();
             }
+            else
+            {
+                VirtualMouse.LeftClick();
+            }
+            return true;
         }
 
         /// <summary>
         /// Double-clicks at the center of an element using VirtualMouse.
+        /// Returns false when no clickable point could be resolved (the click did not happen).
         /// </summary>
-        public static void DoubleClickElementAtCenter(AutomationElement element)
+        public static bool DoubleClickElementAtCenter(AutomationElement element)
         {
-            if (TryGetClickablePoint(element, out Point pt))
-            {
-                VirtualMouse.DoubleClickAt(pt.X, pt.Y);
-            }
+            if (!TryGetClickablePoint(element, out Point pt))
+                return false;
+
+            VirtualMouse.DoubleClickAt(pt.X, pt.Y);
+            return true;
         }
 
         /// <summary>

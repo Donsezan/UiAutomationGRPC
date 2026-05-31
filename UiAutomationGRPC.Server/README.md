@@ -102,26 +102,44 @@ Both approaches support these actions via `PerformAction`:
 
 ### Global Mouse Actions (no element required)
 
-- **MouseMoveAbs** / **MouseMoveRel** - Absolute/relative mouse movement
-- **MouseClickAt** - Click at coordinates
+These act at the current cursor position or at absolute coordinates, simulated via `VirtualMouse`:
+
+- **Move** - Move the cursor to absolute screen coordinates
+- **LeftClick** / **RightClick** / **MouseMiddleClick** - Click at the cursor position
+- **LeftDown** / **LeftUp** / **RightDown** / **RightUp** - Press/release a mouse button
+- **MousWeelScroll** - Scroll the mouse wheel
 
 ## Other Endpoints
 
 | Method | Description |
 |--------|-------------|
-| `OpenApp` | Launch an application by path or name |
-| `CloseApp` | Close an application (graceful or force) |
-| `SendKeys` | Send keyboard input to focused element |
-| `TakeScreenshot` | Capture screen or window screenshot |
-| `Reflect` | Advanced: Query UI Automation properties dynamically |
+| `OpenApp` | Launch an application by path or name (gated by the app WhiteList/BlackList) |
+| `CloseApp` | Terminate all processes matching an app name |
+
+> [!NOTE]
+> For UWP/Store apps (e.g. `calc`), `OpenApp` returns a host/launcher PID rather than the PID that owns the window, so that PID may not work with `GetAppStructure`/`TakeScreenshot` *by PID*. Prefer `GetAppStructure` *by app name* for UWP apps. Classic Win32 apps return the correct PID.
+
+
+| `CloseAppByProcessId` | Terminate a single process by PID |
+| `SendKeys` | Send keyboard input to the focused element (gated by key restrictions) |
+| `TakeScreenshot` | Capture an element or window screenshot |
+| `Reflect` | Advanced: query UI Automation properties, patterns, and control types dynamically |
 | `ClearCache` | Clear element cache — all, by process ID, or by app name |
 
 ---
 
 ## Prerequisites
 
-- .NET Framework 4.7.2 Runtime
-- Administrator privileges (for some UI interactions)
+- Windows with the .NET 8 SDK (the project targets `net8.0-windows`)
+- Administrator privileges (UI Automation access to many target apps requires elevation)
+
+## Running
+
+```powershell
+# Console app (default endpoint http://127.0.0.1:50051 — loopback only)
+# Set Security:AllowRemote=true to listen on all interfaces (0.0.0.0).
+dotnet run --project UiAutomationGRPC.Server
+```
 
 ## Installation
 
@@ -158,13 +176,8 @@ All configuration is done via `appsettings.json`:
     "CertificatePassword": "",
     "TokenAuthEnabled": false,
     "ValidTokens": [],
-    "Port": 50051
-  },
-  "RateLimiting": {
-    "Enabled": false,
-    "RequestsPerMinute": 1000,
-    "RequestsPerSecond": 100,
-    "MaxConcurrentConnections": 50
+    "Port": 50051,
+    "AllowRemote": false
   },
   "WhiteList": [],
   "BlackList": []
@@ -181,19 +194,14 @@ All configuration is done via `appsettings.json`:
 | `Security:TokenAuthEnabled` | bool | `false` | Enable Bearer token authentication |
 | `Security:ValidTokens` | string[] | `[]` | List of accepted tokens |
 | `Security:Port` | int | `50051` | gRPC listening port |
+| `Security:AllowRemote` | bool | `false` | Bind to all interfaces (`0.0.0.0`). When `false` (default) the server binds to loopback `127.0.0.1` only — opt-in because the service can launch/kill processes and synthesize input. |
 
-### Rate Limiting Settings
-
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `RateLimiting:Enabled` | bool | `false` | Enable request rate limiting |
-| `RateLimiting:RequestsPerMinute` | int | `1000` | Max requests per minute |
-| `RateLimiting:RequestsPerSecond` | int | `100` | Max requests per second |
-| `RateLimiting:MaxConcurrentConnections` | int | `50` | Max concurrent connections |
+> [!NOTE]
+> Enabling `TokenAuthEnabled` with an empty `ValidTokens` list is fail-closed: **every** request is rejected as `Unauthenticated`. The server logs a warning at startup when this happens.
 
 ## App Access Control (WhiteList / BlackList)
 
-The server can restrict which applications `OpenApp` is allowed to launch via WhiteList and BlackList rules in `appsettings.json`. If no lists are configured, all applications are allowed by default.
+The server can restrict which applications `OpenApp` is allowed to launch via WhiteList and BlackList rules in `appsettings.json`. When `RestrictInteractions` is `true` (the default), the **same** lists also gate interactions with already-running processes — element operations, `GetAppStructure`, and process termination (`CloseApp` / `CloseAppByProcessId`). If no lists are configured, all applications are allowed by default.
 
 ### Evaluation Logic
 
@@ -232,10 +240,11 @@ flowchart TD
 
 ### Configuration
 
-Add `WhiteList` and/or `BlackList` as top-level arrays in `appsettings.json`:
+Add `WhiteList` and/or `BlackList` as **top-level** arrays in `appsettings.json` (not under `Features`), alongside the optional `RestrictInteractions` flag:
 
 ```json
 {
+  "RestrictInteractions": true,
   "WhiteList": [
     {
       "Path": "C:\\Program Files\\MyApp\\app.exe",
@@ -254,6 +263,10 @@ Add `WhiteList` and/or `BlackList` as top-level arrays in `appsettings.json`:
   ]
 }
 ```
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `RestrictInteractions` | bool | `true` | When `true`, the WhiteList/BlackList also gates interactions with running processes, not just `OpenApp`. When `false`, only app launch is restricted. |
 
 ### App Access Settings
 

@@ -8,14 +8,19 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Official MCP C# SDK (hosting + DI + stdio transport). Pulls ModelContextProtocol.Core. -->
+    <PackageReference Include="ModelContextProtocol" Version="1.3.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.7" />
+
+    <!-- gRPC client only: Grpc.Net.Client (HTTP/2 over HttpClient). The legacy native
+         Grpc.Core 2.46.6 was dropped in Phase 3 — Grpc.Core.Api ships transitively with
+         Grpc.Net.Client and provides the interceptor used for the auth token. -->
     <PackageReference Include="Grpc.Net.Client" Version="2.60.0" />
-    <PackageReference Include="Grpc.Core" Version="2.46.6" />
     <PackageReference Include="Google.Protobuf" Version="3.26.1" />
     <PackageReference Include="Grpc.Tools" Version="2.62.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
   <ItemGroup>

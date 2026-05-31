@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using UiAutomation;
 using UiAutomationGRPC.Server.Handlers;
 using UiAutomationGRPC.Server.Helpers;
+using UiAutomationGRPC.Server.Models;
 
 namespace UiAutomationGRPC.Server
 {
@@ -18,38 +19,46 @@ namespace UiAutomationGRPC.Server
         private readonly ScreenshotHandler _screenshotHandler;
         private readonly AppStructureHandler _structureHandler;
         private readonly ReflectionHandler _reflectionHandler;
+        private readonly UiaExecutor _executor;
         private readonly ILogger<UiAutomationService> _logger;
 
         public UiAutomationService(
             ILoggerFactory loggerFactory,
+            UiaExecutor executor,
             AppAccessValidator? appAccessValidator = null,
             KeyAccessValidator? keyAccessValidator = null,
-            InteractionAccessGuard? interactionGuard = null)
+            InteractionAccessGuard? interactionGuard = null,
+            AppStructureOptions? appStructureOptions = null)
         {
             _logger = loggerFactory.CreateLogger<UiAutomationService>();
+            _executor = executor;
             _elementHandler = new ElementHandler(interactionGuard);
             _actionHandler = new ActionHandler(keyAccessValidator, interactionGuard);
-            _appHandler = new AppLifecycleHandler(loggerFactory.CreateLogger<AppLifecycleHandler>(), appAccessValidator);
+            _appHandler = new AppLifecycleHandler(loggerFactory.CreateLogger<AppLifecycleHandler>(), appAccessValidator, interactionGuard);
             _screenshotHandler = new ScreenshotHandler(interactionGuard);
-            _structureHandler = new AppStructureHandler(loggerFactory.CreateLogger<AppStructureHandler>(), _actionHandler, interactionGuard);
+            _structureHandler = new AppStructureHandler(loggerFactory.CreateLogger<AppStructureHandler>(), _actionHandler, interactionGuard, appStructureOptions);
             _reflectionHandler = new ReflectionHandler(interactionGuard);
         }
 
+        // UIA / global-input operations are marshalled onto the single UIA worker thread.
+        // Process-lifecycle and cache operations below do NOT touch UIA or global input and
+        // run directly (CloseApp's WaitForExit would otherwise starve the worker).
+
         // Element Operations
         public override Task<ElementResponse> FindElement(FindElementRequest request, ServerCallContext context)
-            => _elementHandler.FindElement(request, context);
+            => _executor.RunAsync(() => _elementHandler.FindElement(request, context), context.CancellationToken);
 
         public override Task<ElementListResponse> GetChildren(GetChildrenRequest request, ServerCallContext context)
-            => _elementHandler.GetChildren(request, context);
+            => _executor.RunAsync(() => _elementHandler.GetChildren(request, context), context.CancellationToken);
 
         public override Task<GetPropertyResponse> GetProperty(GetPropertyRequest request, ServerCallContext context)
-            => _elementHandler.GetProperty(request, context);
+            => _executor.RunAsync(() => _elementHandler.GetProperty(request, context), context.CancellationToken);
 
         // Action Operations
         public override Task<PerformActionResponse> PerformAction(PerformActionRequest request, ServerCallContext context)
-            => _actionHandler.PerformAction(request, context);
+            => _executor.RunAsync(() => _actionHandler.PerformAction(request, context), context.CancellationToken);
 
-        // App Lifecycle Operations
+        // App Lifecycle Operations (no UIA / global input — not marshalled)
         public override Task<OpenAppResponse> OpenApp(AppRequest request, ServerCallContext context)
             => _appHandler.OpenApp(request, context);
 
@@ -60,22 +69,22 @@ namespace UiAutomationGRPC.Server
             => _appHandler.CloseAppByProcessId(request, context);
 
         public override Task<PerformActionResponse> SendKeys(SendKeysRequest request, ServerCallContext context)
-            => _actionHandler.SendKeys(request, context);
+            => _executor.RunAsync(() => _actionHandler.SendKeys(request, context), context.CancellationToken);
 
         // Screenshot Operations
         public override Task<ScreenshotResponse> TakeScreenshot(ScreenshotRequest request, ServerCallContext context)
-            => _screenshotHandler.TakeScreenshot(request, context);
+            => _executor.RunAsync(() => _screenshotHandler.TakeScreenshot(request, context), context.CancellationToken);
 
         // App Structure Operations (LLM-friendly)
         public override Task<AppStructureResponse> GetAppStructure(AppStructureRequest request, ServerCallContext context)
-            => _structureHandler.GetAppStructure(request, context);
+            => _executor.RunAsync(() => _structureHandler.GetAppStructure(request, context), context.CancellationToken);
 
         public override Task<AppStructureResponse> PerformActionWithStructure(PerformActionRequest request, ServerCallContext context)
-            => _structureHandler.PerformActionWithStructure(request, context);
+            => _executor.RunAsync(() => _structureHandler.PerformActionWithStructure(request, context), context.CancellationToken);
 
         // Reflection API
         public override Task<ReflectionResponse> Reflect(ReflectionRequest request, ServerCallContext context)
-            => _reflectionHandler.Reflect(request, context);
+            => _executor.RunAsync(() => _reflectionHandler.Reflect(request, context), context.CancellationToken);
 
         // Cache Management
         public override Task<PerformActionResponse> ClearCache(ClearCacheRequest request, ServerCallContext context)

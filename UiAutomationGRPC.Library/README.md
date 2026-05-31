@@ -22,7 +22,7 @@ dotnet add package UiAutomationGRPC
 
 ## Prerequisites
 
-- **.NET 6.0+** runtime
+- **.NET 8 (Windows)** — the package targets `net8.0-windows`
 - **UiAutomationGRPC Server**: The target machine must be running the [UiAutomationGRPC Server](https://github.com/Donsezan/UiAutomationGRPC).
 
 ## Quick Start

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "uiautomation": {
+      "command": "d:\\WorkPlace\\c#\\UiAutomationGRPC\\UiAutomationGRPC\\UiAutomationGRPC.AI\\MCP\\bin\\Debug\\net8.0\\UiAutomationGRPC.LLM.exe",
+      "env": {
+        "UIAUTOMATION_SERVER_ADDRESS": "http://localhost:50051",
+        "UIAUTOMATION_INSECURE_MODE": "true"
+      }
+    }
+  }
+}

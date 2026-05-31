@@ -17,8 +17,11 @@ namespace UiAutomationGRPC.Server.Handlers
             _guard = guard;
         }
 
-        public Task<ElementResponse> FindElement(FindElementRequest request, ServerCallContext context)
+        public ElementResponse FindElement(FindElementRequest request, ServerCallContext context)
         {
+            // Business outcomes (not found / blocked / failed) are returned as
+            // { Success = false, Message } with an empty RuntimeId — not thrown as RpcException.
+            // RpcException is reserved for transport / auth / cancellation.
             try
             {
                 // 1. Resolve Start Element
@@ -27,7 +30,7 @@ namespace UiAutomationGRPC.Server.Handlers
                 {
                     if (!ElementCache.TryGetLive(request.StartRuntimeId, out startElement))
                     {
-                        throw new RpcException(new Status(StatusCode.NotFound, "Start element not found in cache."));
+                        return new ElementResponse { Success = false, Message = "Start element not found in cache." };
                     }
                 }
 
@@ -42,27 +45,23 @@ namespace UiAutomationGRPC.Server.Handlers
 
                 if (foundElement == null)
                 {
-                    throw new RpcException(new Status(StatusCode.NotFound, "Element not found matching condition."));
+                    return new ElementResponse { Success = false, Message = "Element not found matching condition." };
                 }
 
                 // 5. Validate interaction access against the owning process
                 var blocked = InteractionAccessGuard.CheckAccess(_guard, foundElement.Current.ProcessId);
                 if (blocked != null)
-                    throw new RpcException(new Status(StatusCode.PermissionDenied, blocked));
+                    return new ElementResponse { Success = false, Message = blocked };
 
-                return Task.FromResult(AutomationMapper.MapToResponse(foundElement));
-            }
-            catch (RpcException)
-            {
-                throw;
+                return AutomationMapper.MapToResponse(foundElement);
             }
             catch (Exception ex)
             {
-                throw new RpcException(new Status(StatusCode.Internal, $"Error finding element: {ex.Message}"));
+                return new ElementResponse { Success = false, Message = $"Error finding element: {ex.Message}" };
             }
         }
 
-        public Task<ElementListResponse> GetChildren(GetChildrenRequest request, ServerCallContext context)
+        public ElementListResponse GetChildren(GetChildrenRequest request, ServerCallContext context)
         {
             try
             {
@@ -72,7 +71,7 @@ namespace UiAutomationGRPC.Server.Handlers
                 {
                     if (!ElementCache.TryGetLive(request.RuntimeId, out root))
                     {
-                        return Task.FromResult(new ElementListResponse { Success = false, Message = "Root element not found in cache." });
+                        return new ElementListResponse { Success = false, Message = "Root element not found in cache." };
                     }
                 }
 
@@ -81,16 +80,16 @@ namespace UiAutomationGRPC.Server.Handlers
                 {
                     var blocked = InteractionAccessGuard.CheckAccess(_guard, root.Current.ProcessId);
                     if (blocked != null)
-                        return Task.FromResult(new ElementListResponse { Success = false, Message = blocked });
+                        return new ElementListResponse { Success = false, Message = blocked };
                 }
 
                 // 3. Find All Children using TreeWalker for more reliable traversal
                 var children = GetChildElements(root);
-                
-                var response = new ElementListResponse 
-                { 
-                    Success = true, 
-                    Message = $"Found {children.Count} children." 
+
+                var response = new ElementListResponse
+                {
+                    Success = true,
+                    Message = $"Found {children.Count} children."
                 };
 
                 foreach (AutomationElement element in children)
@@ -98,41 +97,41 @@ namespace UiAutomationGRPC.Server.Handlers
                     response.Elements.Add(AutomationMapper.MapToResponse(element));
                 }
 
-                return Task.FromResult(response);
+                return response;
             }
             catch (Exception ex)
             {
-                return Task.FromResult(new ElementListResponse { Success = false, Message = $"Error getting children: {ex.Message}" });
+                return new ElementListResponse { Success = false, Message = $"Error getting children: {ex.Message}" };
             }
         }
 
-        public Task<GetPropertyResponse> GetProperty(GetPropertyRequest request, ServerCallContext context)
+        public GetPropertyResponse GetProperty(GetPropertyRequest request, ServerCallContext context)
         {
             if (!ElementCache.TryGetLive(request.RuntimeId, out var element))
             {
-                throw new RpcException(new Status(StatusCode.NotFound, "Element not found."));
+                return new GetPropertyResponse { Success = false, Message = "Element not found." };
             }
 
             // Validate interaction access
             var blocked = InteractionAccessGuard.CheckAccess(_guard, element.Current.ProcessId);
             if (blocked != null)
-                return Task.FromResult(new GetPropertyResponse { Success = false, Message = blocked });
+                return new GetPropertyResponse { Success = false, Message = blocked };
 
             try
             {
                 AutomationProperty property = AutomationMapper.LookupProperty(request.PropertyName);
                 object val = element.GetCurrentPropertyValue(property);
-                
-                return Task.FromResult(new GetPropertyResponse 
-                { 
-                    Success = true, 
-                    Value = val?.ToString() ?? "", 
-                    Message = "Retrieved" 
-                });
+
+                return new GetPropertyResponse
+                {
+                    Success = true,
+                    Value = val?.ToString() ?? "",
+                    Message = "Retrieved"
+                };
             }
             catch (Exception ex)
             {
-                return Task.FromResult(new GetPropertyResponse { Success = false, Message = $"Error getting property: {ex.Message}" });
+                return new GetPropertyResponse { Success = false, Message = $"Error getting property: {ex.Message}" };
             }
         }
 

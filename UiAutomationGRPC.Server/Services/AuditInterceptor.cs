@@ -48,10 +48,15 @@ public class AuditInterceptor : Interceptor
         catch (Exception ex)
         {
             stopwatch.Stop();
+            // Log the full exception server-side (Event Log / Trace) but do NOT echo the raw
+            // exception text back to the client — it can leak paths, internals, and stack detail.
+            // Business failures are already surfaced as { Success = false, Message } by the handlers;
+            // reaching here means a genuinely unexpected fault, so return an opaque Internal status.
             _logger.LogError(ex,
                 "gRPC Call: Method={Method} | Client={Client} | Duration={Duration}ms | Status=INTERNAL_ERROR",
                 method, peer, stopwatch.ElapsedMilliseconds);
-            throw new RpcException(new Status(StatusCode.Internal, ex.Message));
+            throw new RpcException(new Status(StatusCode.Internal,
+                "An internal server error occurred. See the server logs for details."));
         }
     }
 }

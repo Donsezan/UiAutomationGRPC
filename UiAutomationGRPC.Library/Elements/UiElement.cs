@@ -44,7 +44,7 @@ namespace UiAutomationGRPC.Library.Elements
                 var req = BuildFindRequest(currentRuntimeId, selector);
                 var resp = await _client.FindElementAsync(req);
 
-                ValidateRuntimeId(resp.RuntimeId, selector);
+                ValidateRuntimeId(resp.RuntimeId, selector, resp.Message);
                 currentRuntimeId = resp.RuntimeId;
             }
             return currentRuntimeId;
@@ -85,18 +85,22 @@ namespace UiAutomationGRPC.Library.Elements
         /// <summary>
         /// Validates that a RuntimeId is non-empty after a FindElement call.
         /// Throws <see cref="InvalidOperationException"/> with selector detail on failure.
+        /// The server reports not-found / blocked as { Success = false, Message } with an empty
+        /// RuntimeId (rather than an RpcException), so <paramref name="serverMessage"/> carries
+        /// the server-side reason when available.
         /// </summary>
-        private static void ValidateRuntimeId(string runtimeId, SelectorModel selector)
+        private static void ValidateRuntimeId(string runtimeId, SelectorModel selector, string? serverMessage = null)
         {
             if (!string.IsNullOrEmpty(runtimeId))
                 return;
 
             var conditionDescription = BuildConditionDescription(selector);
+            var serverDetail = string.IsNullOrEmpty(serverMessage) ? "" : $" Server: {serverMessage}";
             throw new InvalidOperationException(
                 $"FindElement returned an empty RuntimeId. " +
                 $"Selector conditions: [{conditionDescription}], " +
                 $"SearchType: {selector.SearchType?.ToString() ?? "null"}. " +
-                "The element was not found in the UI tree.");
+                "The element was not found in the UI tree." + serverDetail);
         }
 
         /// <summary>
