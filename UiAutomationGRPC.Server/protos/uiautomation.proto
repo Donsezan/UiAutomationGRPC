@@ -128,6 +128,17 @@ message PerformActionRequest {
     string runtime_id = 1;
     ActionType action = 2;
     repeated string arguments = 3; // For SetValue etc.
+    StructureOptions structure_options = 4; // Only used by PerformActionWithStructure (ignored by PerformAction)
+}
+
+// Per-request overrides for the app-structure tree build. Every field is optional;
+// unset fields fall back to the server's Features:AppStructure defaults.
+message StructureOptions {
+    int32 max_depth = 1;                  // > 0 overrides the depth cap for this request
+    int32 max_nodes = 2;                  // > 0 overrides the node cap for this request
+    optional bool include_offscreen = 3;  // set to override offscreen filtering for this request
+    string scope_runtime_id = 4;          // non-empty: build the tree under this element instead of the window root
+    bool diff_mode = 5;                   // true: return only nodes added/changed/removed since the previous build of this process
 }
 
 enum ActionType {
@@ -243,6 +254,7 @@ message AppStructureRequest {
     int32 process_id = 2;
     bool use_process_id = 3; // if true, use process_id, else app_name
     string arguments = 4; // For launching if not open (optional)
+    StructureOptions structure_options = 5;
 }
 
 message AppStructureResponse {

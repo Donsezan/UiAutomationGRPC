@@ -56,19 +56,24 @@ public static class UiAutomationTools
 
     // ---------------------------------------------------------------- See
 
-    [McpServerTool(Name = "get_app_structure"), Description("Returns the UI tree of an application as a compact JSON string. Address the app either by process id (set useProcessId=true) or by name. Use this as the 'See' step of a See -> Think -> Act loop.")]
+    [McpServerTool(Name = "get_app_structure"), Description("Returns the UI tree of an application as a compact JSON string. Address the app either by process id (set useProcessId=true) or by name. Use this as the 'See' step of a See -> Think -> Act loop. For large apps prefer a scoped/shallow request (scopeRuntimeId / maxDepth) — it is faster and uses far fewer tokens.")]
     public static async Task<CallToolResult> GetAppStructure(
         UiAutomationService.UiAutomationServiceClient client,
         [Description("Set true to look the app up by process_id; false to look it up by app_name.")] bool useProcessId,
         [Description("Process id of the target app (used when use_process_id is true).")] int processId = 0,
         [Description("Name of the target app (used when use_process_id is false).")] string? appName = null,
+        [Description("Optional: build the tree under this element (runtime_id) instead of the whole window.")] string? scopeRuntimeId = null,
+        [Description("Optional: override the server's depth cap for this request (>0).")] int maxDepth = 0,
+        [Description("Optional: override the server's node cap for this request (>0).")] int maxNodes = 0,
+        [Description("Optional: include offscreen elements for this request.")] bool? includeOffscreen = null,
         CancellationToken ct = default)
     {
         var resp = await client.GetAppStructureAsync(new AppStructureRequest
         {
             UseProcessId = useProcessId,
             ProcessId = processId,
-            AppName = appName ?? ""
+            AppName = appName ?? "",
+            StructureOptions = BuildStructureOptions(scopeRuntimeId, maxDepth, maxNodes, includeOffscreen)
         }, cancellationToken: ct);
         return Text(resp.Success ? resp.JsonStructure : resp.Message, !resp.Success);
     }
@@ -197,16 +202,20 @@ public static class UiAutomationTools
         return Json(new { success = resp.Success, message = resp.Message }, !resp.Success);
     }
 
-    [McpServerTool(Name = "perform_action_with_structure"), Description("Performs an action on an element and returns the refreshed UI tree as compact JSON in one call. Ideal for the LLM 'See -> Think -> Act' loop. action / arguments behave like perform_action.")]
+    [McpServerTool(Name = "perform_action_with_structure"), Description("Performs an action on an element and returns the refreshed UI tree as compact JSON in one call. Ideal for the LLM 'See -> Think -> Act' loop. action / arguments behave like perform_action. Use scopeRuntimeId / maxDepth to get back only the part of the UI you care about (saves tokens on big apps).")]
     public static async Task<CallToolResult> PerformActionWithStructure(
         UiAutomationService.UiAutomationServiceClient client,
         [Description("runtime_id of the target element.")] string runtimeId,
         [Description("Action name (e.g. INVOKE, TOGGLE, SET_VALUE, LeftClick).")] string action,
         [Description("Optional arguments, e.g. the text for SET_VALUE.")] string[]? arguments = null,
+        [Description("Optional: return only the subtree under this element (runtime_id) instead of the whole window.")] string? scopeRuntimeId = null,
+        [Description("Optional: override the server's depth cap for this request (>0).")] int maxDepth = 0,
+        [Description("Optional: override the server's node cap for this request (>0).")] int maxNodes = 0,
         CancellationToken ct = default)
     {
-        var resp = await client.PerformActionWithStructureAsync(
-            BuildActionRequest(runtimeId, action, arguments), cancellationToken: ct);
+        var request = BuildActionRequest(runtimeId, action, arguments);
+        request.StructureOptions = BuildStructureOptions(scopeRuntimeId, maxDepth, maxNodes, includeOffscreen: null);
+        var resp = await client.PerformActionWithStructureAsync(request, cancellationToken: ct);
         return Text(resp.Success ? resp.JsonStructure : resp.Message, !resp.Success);
     }
 
@@ -298,6 +307,19 @@ public static class UiAutomationTools
         if (arguments != null)
             req.Arguments.AddRange(arguments);
         return req;
+    }
+
+    private static StructureOptions BuildStructureOptions(string? scopeRuntimeId, int maxDepth, int maxNodes, bool? includeOffscreen)
+    {
+        var options = new StructureOptions
+        {
+            ScopeRuntimeId = scopeRuntimeId ?? "",
+            MaxDepth = maxDepth,
+            MaxNodes = maxNodes
+        };
+        if (includeOffscreen.HasValue)
+            options.IncludeOffscreen = includeOffscreen.Value;
+        return options;
     }
 
     private static TEnum ParseEnum<TEnum>(string? value, TEnum fallback) where TEnum : struct, Enum =>

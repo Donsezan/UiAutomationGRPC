@@ -373,19 +373,26 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// <param name="useProcessId">Whether to use process ID instead of app name.</param>
     /// <param name="arguments">Optional arguments for launching if not open.</param>
     /// <returns>A tuple containing success status, message, and JSON structure.</returns>
+    /// <param name="structureOptions">Optional per-request overrides (depth/node caps, offscreen
+    /// filtering, scoped subtree) merged over the server's <c>Features:AppStructure</c> defaults.</param>
     public async Task<(bool Success, string Message, string JsonStructure)> GetAppStructureAsync(
         string appName = "",
         int processId = 0,
         bool useProcessId = false,
-        string arguments = "")
+        string arguments = "",
+        StructureOptions? structureOptions = null)
     {
-        var response = await Client.GetAppStructureAsync(new AppStructureRequest
+        var request = new AppStructureRequest
         {
             AppName = appName,
             ProcessId = processId,
             UseProcessId = useProcessId,
             Arguments = arguments
-        });
+        };
+        if (structureOptions != null)
+            request.StructureOptions = structureOptions;
+
+        var response = await Client.GetAppStructureAsync(request);
         return (response.Success, response.Message, response.JsonStructure);
     }
 
@@ -400,6 +407,17 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
         string runtimeId,
         ActionType action,
         params string[] arguments)
+        => await PerformActionWithStructureAsync(runtimeId, action, structureOptions: null, arguments);
+
+    /// <summary>
+    /// Performs an action and returns the updated application structure, with per-request
+    /// structure overrides (depth/node caps, scoped subtree) to shrink the response.
+    /// </summary>
+    public async Task<(bool Success, string Message, string JsonStructure)> PerformActionWithStructureAsync(
+        string runtimeId,
+        ActionType action,
+        StructureOptions? structureOptions,
+        params string[] arguments)
     {
         var request = new PerformActionRequest
         {
@@ -410,6 +428,10 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
         if (arguments?.Length > 0)
         {
             request.Arguments.AddRange(arguments);
+        }
+        if (structureOptions != null)
+        {
+            request.StructureOptions = structureOptions;
         }
 
         var response = await Client.PerformActionWithStructureAsync(request);

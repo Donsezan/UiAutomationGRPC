@@ -44,6 +44,29 @@ namespace UiAutomationGRPC.Server.Handlers
         {
             try
             {
+                var effective = _options.MergeWith(request.StructureOptions);
+
+                // Scoped build: the client asked for the subtree under a known element instead of
+                // the whole window — much cheaper for big/dynamic apps.
+                string scopeId = request.StructureOptions?.ScopeRuntimeId ?? "";
+                if (!string.IsNullOrEmpty(scopeId))
+                {
+                    if (!ElementCache.TryGetLive(scopeId, out var scopeElement))
+                        return new AppStructureResponse { Success = false, Message = $"Scope element '{scopeId}' not found in cache." };
+
+                    var scopeBlocked = InteractionAccessGuard.CheckAccess(_guard, scopeElement.Current.ProcessId);
+                    if (scopeBlocked != null)
+                        return new AppStructureResponse { Success = false, Message = scopeBlocked };
+
+                    var (scopedNode, scopedCtx) = BuildTree(scopeElement, context.CancellationToken, effective);
+                    return new AppStructureResponse
+                    {
+                        Success = true,
+                        JsonStructure = Serialize(scopedNode, effective),
+                        Message = DescribeResult(scopedCtx)
+                    };
+                }
+
                 Process[] processes = null;
 
                 if (request.UseProcessId && request.ProcessId > 0)
@@ -179,8 +202,8 @@ namespace UiAutomationGRPC.Server.Handlers
                 try { ElementCache.ClearByProcess(rootMapElement.Current.ProcessId); }
                 catch (System.Windows.Automation.ElementNotAvailableException) { }
 
-                var (rootNode, ctx) = BuildTree(rootMapElement, context.CancellationToken);
-                var json = Serialize(rootNode);
+                var (rootNode, ctx) = BuildTree(rootMapElement, context.CancellationToken, effective);
+                var json = Serialize(rootNode, effective);
 
                 return new AppStructureResponse { Success = true, JsonStructure = json, Message = DescribeResult(ctx) };
             }
@@ -204,6 +227,8 @@ namespace UiAutomationGRPC.Server.Handlers
 
             try
             {
+                var effective = _options.MergeWith(request.StructureOptions);
+
                 if (ElementCache.TryGetLive(request.RuntimeId, out var element))
                 {
                     var window = ScreenshotHandler.GetTopLevelWindow(element);
@@ -213,12 +238,19 @@ namespace UiAutomationGRPC.Server.Handlers
                         // intentionally so no other operation interleaves before the refreshed read.
                         Thread.Sleep(200);
 
+                        // Scoped rebuild: return only the subtree the client cares about.
+                        // Resolve AFTER the action + settle so the scope element reflects the new state.
+                        AutomationElement rebuildRoot = window;
+                        string scopeId = request.StructureOptions?.ScopeRuntimeId ?? "";
+                        if (!string.IsNullOrEmpty(scopeId) && ElementCache.TryGetLive(scopeId, out var scopeElement))
+                            rebuildRoot = scopeElement;
+
                         // Flush stale cache for this process before rebuilding fresh
                         try { ElementCache.ClearByProcess(window.Current.ProcessId); }
                         catch (System.Windows.Automation.ElementNotAvailableException) { }
 
-                        var (rootNode, ctx) = BuildTree(window, context.CancellationToken);
-                        var json = Serialize(rootNode);
+                        var (rootNode, ctx) = BuildTree(rebuildRoot, context.CancellationToken, effective);
+                        var json = Serialize(rootNode, effective);
                         return new AppStructureResponse { Success = true, JsonStructure = json, Message = $"Action performed. {DescribeResult(ctx)}" };
                     }
                 }
@@ -245,9 +277,9 @@ namespace UiAutomationGRPC.Server.Handlers
         /// the cached snapshot instead of one cross-process COM round-trip each. Falls back to live
         /// reads transparently if the cache cannot be activated.
         /// </summary>
-        private (AppNode node, BuildContext ctx) BuildTree(AutomationElement liveRoot, CancellationToken ct)
+        private (AppNode node, BuildContext ctx) BuildTree(AutomationElement liveRoot, CancellationToken ct, AppStructureOptions? options = null)
         {
-            var ctx = new BuildContext { Ct = ct };
+            var ctx = new BuildContext { Ct = ct, Options = options ?? _options };
             AutomationElement root = liveRoot;
 
             try
@@ -298,8 +330,9 @@ namespace UiAutomationGRPC.Server.Handlers
         private AppNode BuildNode(AutomationElement element, BuildContext ctx, int depth)
         {
             ctx.Ct.ThrowIfCancellationRequested();
+            var options = ctx.Options;
 
-            if (_options.MaxNodes > 0 && ctx.Emitted >= _options.MaxNodes)
+            if (options.MaxNodes > 0 && ctx.Emitted >= options.MaxNodes)
             {
                 ctx.Truncated = true;
                 return null;
@@ -317,7 +350,7 @@ namespace UiAutomationGRPC.Server.Handlers
 
             // Filter offscreen / zero-size nodes (and their subtrees) unless opted in.
             // The root window is never filtered, so a minimized app still returns a tree.
-            if (!isRoot && !_options.IncludeOffscreen && (isOffscreen || zeroSize))
+            if (!isRoot && !options.IncludeOffscreen && (isOffscreen || zeroSize))
                 return null;
 
             string automationId = AsString(Prop(element, AutomationElement.AutomationIdProperty));
@@ -361,7 +394,7 @@ namespace UiAutomationGRPC.Server.Handlers
             var children = GetChildElements(element);
 
             // Depth cap: stop descending but record that this subtree is incomplete.
-            if (_options.MaxDepth > 0 && depth >= _options.MaxDepth)
+            if (options.MaxDepth > 0 && depth >= options.MaxDepth)
             {
                 if (children.Count > 0)
                 {
@@ -377,7 +410,7 @@ namespace UiAutomationGRPC.Server.Handlers
                 if (childNode != null)
                     node.Children.Add(childNode);
 
-                if (_options.MaxNodes > 0 && ctx.Emitted >= _options.MaxNodes)
+                if (options.MaxNodes > 0 && ctx.Emitted >= options.MaxNodes)
                 {
                     node.ChildrenTruncated = true;
                     ctx.Truncated = true;
@@ -409,8 +442,8 @@ namespace UiAutomationGRPC.Server.Handlers
             }
         }
 
-        private string Serialize(AppNode root) =>
-            JsonConvert.SerializeObject(root, _options.CompactJson ? Formatting.None : Formatting.Indented, _jsonSettings);
+        private string Serialize(AppNode root, AppStructureOptions? options = null) =>
+            JsonConvert.SerializeObject(root, (options ?? _options).CompactJson ? Formatting.None : Formatting.Indented, _jsonSettings);
 
         private static string DescribeResult(BuildContext ctx) =>
             ctx.Truncated
@@ -433,6 +466,7 @@ namespace UiAutomationGRPC.Server.Handlers
         private sealed class BuildContext
         {
             public CancellationToken Ct;
+            public AppStructureOptions Options = new();
             public int Emitted;
             public bool Truncated;
         }
