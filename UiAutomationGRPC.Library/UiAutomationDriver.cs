@@ -1,4 +1,5 @@
 using Grpc.Net.Client;
+using Grpc.Net.Client.Configuration;
 using Grpc.Core;
 using Grpc.Core.Interceptors;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,10 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     private readonly bool _insecureMode;
     private readonly string? _authToken;
     private readonly ILogger<UiAutomationDriver>? _logger;
+    private readonly TimeSpan _defaultTimeout;
+
+    /// <summary>Fallback per-call deadline applied when the caller does not supply one.</summary>
+    public static readonly TimeSpan DefaultCallTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Internal gRPC client.
@@ -34,17 +39,21 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// <param name="certificatePath">Optional path to a PFX/PEM certificate file for trusting self-signed server certificates without OS-level installation.</param>
     /// <param name="certificatePassword">Optional password for the certificate file.</param>
     /// <param name="logger">Optional logger for diagnostics. When null, warnings are silently omitted.</param>
+    /// <param name="defaultTimeout">Per-call deadline applied to every RPC (default 30 s). A hung
+    /// server then fails the call with <c>DeadlineExceeded</c> instead of blocking forever.</param>
     public UiAutomationDriver(
         string address = "https://127.0.0.1:50051",
         string? authToken = null,
         bool insecureMode = false,
         string? certificatePath = null,
         string? certificatePassword = null,
-        ILogger<UiAutomationDriver>? logger = null)
+        ILogger<UiAutomationDriver>? logger = null,
+        TimeSpan? defaultTimeout = null)
     {
         _insecureMode = insecureMode;
         _authToken = authToken;
         _logger = logger;
+        _defaultTimeout = defaultTimeout ?? DefaultCallTimeout;
 
         if (_insecureMode)
         {
@@ -80,7 +89,8 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
 
         var channelOptions = new GrpcChannelOptions
         {
-            HttpHandler = handler
+            HttpHandler = handler,
+            ServiceConfig = BuildServiceConfig()
         };
 
         _channel = GrpcChannel.ForAddress(address, channelOptions);
@@ -100,6 +110,34 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
             Client = new UiAutomationService.UiAutomationServiceClient(_channel);
         }
     }
+
+    /// <summary>
+    /// Transparent retry for status codes the server only returns BEFORE any work has started:
+    /// ResourceExhausted (the UIA worker queue rejected the request) and Unavailable (connection
+    /// refused / server shutting down). Codes that can occur mid-action are deliberately NOT
+    /// retryable — replaying a click or keystroke is never safe.
+    /// </summary>
+    internal static ServiceConfig BuildServiceConfig() => new()
+    {
+        MethodConfigs =
+        {
+            new MethodConfig
+            {
+                Names = { MethodName.Default },
+                RetryPolicy = new RetryPolicy
+                {
+                    MaxAttempts = 4,
+                    InitialBackoff = TimeSpan.FromMilliseconds(200),
+                    MaxBackoff = TimeSpan.FromSeconds(2),
+                    BackoffMultiplier = 2,
+                    RetryableStatusCodes = { StatusCode.ResourceExhausted, StatusCode.Unavailable }
+                }
+            }
+        }
+    };
+
+    /// <summary>Deadline for the next call: now + the supplied or default timeout.</summary>
+    private DateTime Deadline(TimeSpan? timeout = null) => DateTime.UtcNow + (timeout ?? _defaultTimeout);
 
     /// <summary>
     /// Configures the HTTP handler to trust a specific certificate for self-signed cert scenarios.
@@ -162,9 +200,10 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// <see cref="GetAppStructureAsync"/>/screenshot calls. Prefer <see cref="GetAppStructureAsync"/>
     /// by app name for UWP apps. Classic Win32 apps return the correct PID.
     /// </remarks>
-    public async Task<(bool Success, string Message, int ProcessId)> OpenAppAsync(string appName, string arguments = "")
+    public async Task<(bool Success, string Message, int ProcessId)> OpenAppAsync(string appName, string arguments = "", CancellationToken cancellationToken = default)
     {
-        var response = await Client.OpenAppAsync(new AppRequest { AppName = appName, Arguments = arguments });
+        var response = await Client.OpenAppAsync(new AppRequest { AppName = appName, Arguments = arguments },
+            deadline: Deadline(), cancellationToken: cancellationToken);
         return (response.Success, response.Message, response.ProcessId);
     }
 
@@ -173,9 +212,10 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// </summary>
     /// <param name="appName">The name of the application.</param>
     /// <returns>A tuple containing success status and message.</returns>
-    public async Task<(bool Success, string Message)> CloseAppAsync(string appName)
+    public async Task<(bool Success, string Message)> CloseAppAsync(string appName, CancellationToken cancellationToken = default)
     {
-        var response = await Client.CloseAppAsync(new AppRequest { AppName = appName });
+        var response = await Client.CloseAppAsync(new AppRequest { AppName = appName },
+            deadline: Deadline(), cancellationToken: cancellationToken);
         return (response.Success, response.Message);
     }
 
@@ -184,9 +224,10 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// </summary>
     /// <param name="processId">The process ID of the application.</param>
     /// <returns>A tuple containing success status and message.</returns>
-    public async Task<(bool Success, string Message)> CloseAppByProcessIdAsync(int processId)
+    public async Task<(bool Success, string Message)> CloseAppByProcessIdAsync(int processId, CancellationToken cancellationToken = default)
     {
-        var response = await Client.CloseAppByProcessIdAsync(new CloseAppByProcessIdRequest { ProcessId = processId });
+        var response = await Client.CloseAppByProcessIdAsync(new CloseAppByProcessIdRequest { ProcessId = processId },
+            deadline: Deadline(), cancellationToken: cancellationToken);
         return (response.Success, response.Message);
     }
 
@@ -199,8 +240,8 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// </summary>
     /// <param name="request">The find element request.</param>
     /// <returns>The found element response.</returns>
-    public async Task<ElementResponse> FindElementAsync(FindElementRequest request)
-        => await Client.FindElementAsync(request);
+    public async Task<ElementResponse> FindElementAsync(FindElementRequest request, CancellationToken cancellationToken = default)
+        => await Client.FindElementAsync(request, deadline: Deadline(), cancellationToken: cancellationToken);
 
     /// <summary>
     /// Waits (server-side) until an element matching the condition appears, or the timeout elapses.
@@ -210,7 +251,7 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// <param name="timeoutMs">Total wait budget in ms. 0 uses the server default (10 s); capped server-side at 120 s.</param>
     /// <param name="pollIntervalMs">Delay between probes in ms. 0 uses the server default (250 ms).</param>
     /// <returns>The element response; <c>Success</c> is false if the element never appeared.</returns>
-    public async Task<ElementResponse> WaitForElementAsync(FindElementRequest request, int timeoutMs = 0, int pollIntervalMs = 0)
+    public async Task<ElementResponse> WaitForElementAsync(FindElementRequest request, int timeoutMs = 0, int pollIntervalMs = 0, CancellationToken cancellationToken = default)
     {
         var waitRequest = new WaitForElementRequest
         {
@@ -220,7 +261,13 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
             TimeoutMs = timeoutMs,
             PollIntervalMs = pollIntervalMs
         };
-        return await Client.WaitForElementAsync(waitRequest);
+
+        // The RPC legitimately runs as long as the requested wait — give the deadline headroom
+        // beyond the server-side budget instead of cutting the wait short at the default 30 s.
+        var serverBudget = TimeSpan.FromMilliseconds(timeoutMs <= 0 ? 10_000 : Math.Min(timeoutMs, 120_000));
+        var deadline = Deadline(serverBudget + TimeSpan.FromSeconds(10));
+
+        return await Client.WaitForElementAsync(waitRequest, deadline: deadline, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -228,10 +275,10 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// </summary>
     /// <param name="runtimeId">The runtime ID of the parent element.</param>
     /// <returns>A tuple containing success status, message, and list of elements.</returns>
-    public async Task<(bool Success, string Message, List<ElementResponse> Elements)> GetChildrenAsync(string runtimeId = "")
+    public async Task<(bool Success, string Message, List<ElementResponse> Elements)> GetChildrenAsync(string runtimeId = "", CancellationToken cancellationToken = default)
     {
         var request = new GetChildrenRequest { RuntimeId = runtimeId ?? "" };
-        var response = await Client.GetChildrenAsync(request);
+        var response = await Client.GetChildrenAsync(request, deadline: Deadline(), cancellationToken: cancellationToken);
         var elements = response.Elements?.ToList() ?? new List<ElementResponse>();
         return (response.Success, response.Message, elements);
     }
@@ -248,6 +295,12 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// <param name="arguments">Optional arguments for the action.</param>
     /// <returns>A tuple containing success status and message.</returns>
     public async Task<(bool Success, string Message)> PerformActionAsync(string runtimeId, ActionType action, params string[] arguments)
+        => await PerformActionAsync(runtimeId, action, CancellationToken.None, arguments);
+
+    /// <summary>
+    /// Performs an action on an element with cancellation support.
+    /// </summary>
+    public async Task<(bool Success, string Message)> PerformActionAsync(string runtimeId, ActionType action, CancellationToken cancellationToken, params string[] arguments)
     {
         var request = new PerformActionRequest
         {
@@ -260,7 +313,7 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
             request.Arguments.AddRange(arguments);
         }
 
-        var response = await Client.PerformActionAsync(request);
+        var response = await Client.PerformActionAsync(request, deadline: Deadline(), cancellationToken: cancellationToken);
         return (response.Success, response.Message);
     }
 
@@ -275,13 +328,13 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// focus. When null/empty, keys go to the currently focused window (legacy behavior).
     /// </param>
     /// <returns>A tuple containing success status and message.</returns>
-    public async Task<(bool Success, string Message)> SendKeysAsync(string keys, bool wait = true, string? runtimeId = null)
+    public async Task<(bool Success, string Message)> SendKeysAsync(string keys, bool wait = true, string? runtimeId = null, CancellationToken cancellationToken = default)
     {
         var request = new SendKeysRequest { Keys = keys, Wait = wait };
         if (!string.IsNullOrEmpty(runtimeId))
             request.RuntimeId = runtimeId;
 
-        var response = await Client.SendKeysAsync(request);
+        var response = await Client.SendKeysAsync(request, deadline: Deadline(), cancellationToken: cancellationToken);
         return (response.Success, response.Message);
     }
 
@@ -295,13 +348,13 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// <param name="runtimeId">The runtime ID of the element.</param>
     /// <param name="propertyName">The property name.</param>
     /// <returns>A tuple containing success status, value, and message.</returns>
-    public async Task<(bool Success, string Value, string Message)> GetPropertyAsync(string runtimeId, string propertyName)
+    public async Task<(bool Success, string Value, string Message)> GetPropertyAsync(string runtimeId, string propertyName, CancellationToken cancellationToken = default)
     {
         var response = await Client.GetPropertyAsync(new GetPropertyRequest
         {
             RuntimeId = runtimeId,
             PropertyName = propertyName
-        });
+        }, deadline: Deadline(), cancellationToken: cancellationToken);
         return (response.Success, response.Value, response.Message);
     }
 
@@ -314,10 +367,10 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// </summary>
     /// <param name="runtimeId">The runtime ID of the element.</param>
     /// <returns>A tuple containing success status, message, and image data.</returns>
-    public async Task<(bool Success, string Message, byte[] ImageData)> TakeElementScreenshotAsync(string runtimeId)
+    public async Task<(bool Success, string Message, byte[] ImageData)> TakeElementScreenshotAsync(string runtimeId, CancellationToken cancellationToken = default)
     {
         var request = new ScreenshotRequest { Mode = ScreenshotMode.Element, RuntimeId = runtimeId };
-        var response = await Client.TakeScreenshotAsync(request);
+        var response = await Client.TakeScreenshotAsync(request, deadline: Deadline(), cancellationToken: cancellationToken);
         return (response.Success, response.Message, response.ImageData.ToByteArray());
     }
 
@@ -327,7 +380,7 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// <param name="runtimeId">Optional runtime ID to highlight.</param>
     /// <param name="processId">Optional process ID to target a specific window.</param>
     /// <returns>A tuple containing success status, message, and image data.</returns>
-    public async Task<(bool Success, string Message, byte[] ImageData)> TakeWindowScreenshotAsync(string? runtimeId = null, int? processId = null)
+    public async Task<(bool Success, string Message, byte[] ImageData)> TakeWindowScreenshotAsync(string? runtimeId = null, int? processId = null, CancellationToken cancellationToken = default)
     {
         var request = new ScreenshotRequest { Mode = ScreenshotMode.Window };
 
@@ -337,7 +390,7 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
         if (processId.HasValue)
             request.ProcessId = processId.Value;
 
-        var response = await Client.TakeScreenshotAsync(request);
+        var response = await Client.TakeScreenshotAsync(request, deadline: Deadline(), cancellationToken: cancellationToken);
         return (response.Success, response.Message, response.ImageData.ToByteArray());
     }
 
@@ -351,14 +404,14 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// <param name="target">The reflection target.</param>
     /// <param name="runtimeId">Optional runtime ID for element-specific queries.</param>
     /// <returns>The reflection response.</returns>
-    public async Task<ReflectionResponse> ReflectAsync(ReflectionTarget target, string? runtimeId = null)
+    public async Task<ReflectionResponse> ReflectAsync(ReflectionTarget target, string? runtimeId = null, CancellationToken cancellationToken = default)
     {
         var request = new ReflectionRequest { Target = target };
 
         if (!string.IsNullOrEmpty(runtimeId))
             request.RuntimeId = runtimeId;
 
-        return await Client.ReflectAsync(request);
+        return await Client.ReflectAsync(request, deadline: Deadline(), cancellationToken: cancellationToken);
     }
 
     #endregion
@@ -380,7 +433,8 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
         int processId = 0,
         bool useProcessId = false,
         string arguments = "",
-        StructureOptions? structureOptions = null)
+        StructureOptions? structureOptions = null,
+        CancellationToken cancellationToken = default)
     {
         var request = new AppStructureRequest
         {
@@ -392,7 +446,7 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
         if (structureOptions != null)
             request.StructureOptions = structureOptions;
 
-        var response = await Client.GetAppStructureAsync(request);
+        var response = await Client.GetAppStructureAsync(request, deadline: Deadline(), cancellationToken: cancellationToken);
         return (response.Success, response.Message, response.JsonStructure);
     }
 
@@ -434,7 +488,7 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
             request.StructureOptions = structureOptions;
         }
 
-        var response = await Client.PerformActionWithStructureAsync(request);
+        var response = await Client.PerformActionWithStructureAsync(request, deadline: Deadline());
         return (response.Success, response.Message, response.JsonStructure);
     }
 
@@ -450,7 +504,7 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
     /// <param name="processId">Optional process ID to clear cache for a specific process.</param>
     /// <param name="appName">Optional app name to clear cache by name (like CloseApp).</param>
     /// <returns>A tuple containing success status and message.</returns>
-    public async Task<(bool Success, string Message)> ClearCacheAsync(int processId = 0, string appName = "")
+    public async Task<(bool Success, string Message)> ClearCacheAsync(int processId = 0, string appName = "", CancellationToken cancellationToken = default)
     {
         var request = new ClearCacheRequest();
 
@@ -459,7 +513,7 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
         else if (processId > 0)
             request.ProcessId = processId;
 
-        var response = await Client.ClearCacheAsync(request);
+        var response = await Client.ClearCacheAsync(request, deadline: Deadline(), cancellationToken: cancellationToken);
         return (response.Success, response.Message);
     }
 

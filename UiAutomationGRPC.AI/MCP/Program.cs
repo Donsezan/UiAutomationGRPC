@@ -1,6 +1,8 @@
 using System.Net.Http;
+using Grpc.Core;
 using Grpc.Core.Interceptors;
 using Grpc.Net.Client;
+using Grpc.Net.Client.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -36,7 +38,31 @@ if (insecureMode)
 // the SDK resolves it from DI and omits it from each tool's JSON schema.
 builder.Services.AddSingleton<UiAutomationService.UiAutomationServiceClient>(_ =>
 {
-    var options = new GrpcChannelOptions();
+    var options = new GrpcChannelOptions
+    {
+        // Transparent retry for pre-execution rejections only: ResourceExhausted (UIA worker
+        // queue full) and Unavailable (connection refused / shutdown). A busy moment then
+        // surfaces to the LLM as a short delay instead of a hard tool error. Codes that can
+        // occur mid-action are NOT retried — replaying a click is never safe.
+        ServiceConfig = new ServiceConfig
+        {
+            MethodConfigs =
+            {
+                new MethodConfig
+                {
+                    Names = { MethodName.Default },
+                    RetryPolicy = new RetryPolicy
+                    {
+                        MaxAttempts = 4,
+                        InitialBackoff = TimeSpan.FromMilliseconds(200),
+                        MaxBackoff = TimeSpan.FromSeconds(2),
+                        BackoffMultiplier = 2,
+                        RetryableStatusCodes = { StatusCode.ResourceExhausted, StatusCode.Unavailable }
+                    }
+                }
+            }
+        }
+    };
     if (insecureMode)
     {
         // Allow HTTP/2 without TLS (h2c) for development.
