@@ -60,6 +60,9 @@ public class Program
             ? "[Config] Cache: Enabled (persisted element handles reused, re-found if stale)"
             : "[Config] Cache: DISABLED \u2014 every request re-resolves elements from the live UI tree");
 
+        // Evict cache entries / structure snapshots of exited processes once a minute.
+        UiAutomationGRPC.Server.Helpers.ElementCache.StartSweeper(TimeSpan.FromSeconds(60));
+
         // Single serialized UI Automation worker. All UIA/input RPCs are marshalled onto
         // one dedicated MTA thread so concurrent clients can't fight over the mouse/keyboard
         // or race the element cache. The queue depth caps backlog before ResourceExhausted.

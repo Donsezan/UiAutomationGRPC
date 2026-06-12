@@ -221,6 +221,58 @@ namespace UiAutomationGRPC.Server.Helpers
         /// </summary>
         public static void Clear() => _cache.Clear();
 
+        // ---------------------------------------------------------------- dead-process sweep
+
+        private static System.Threading.Timer? _sweeper;
+
+        /// <summary>
+        /// Starts a periodic background sweep that evicts cache entries (and structure snapshots)
+        /// belonging to processes that have exited. Without it, entries for dead apps linger until
+        /// individually touched, growing the cache unbounded in a long-running server.
+        /// Idempotent; called once at server startup. Not started implicitly so tests using fake
+        /// PIDs are unaffected.
+        /// </summary>
+        public static void StartSweeper(TimeSpan interval)
+        {
+            _sweeper ??= new System.Threading.Timer(
+                _ => { try { SweepDeadProcesses(); } catch (Exception ex) { Trace.WriteLine($"[ElementCache] Sweep failed: {ex.Message}"); } },
+                state: null, dueTime: interval, period: interval);
+        }
+
+        /// <summary>
+        /// Removes all entries whose owning process is no longer running.
+        /// Returns the number of removed elements.
+        /// </summary>
+        public static int SweepDeadProcesses()
+        {
+            var pids = new HashSet<int>();
+            foreach (var entry in _cache.Values)
+                pids.Add(entry.ProcessId);
+
+            int removed = 0;
+            foreach (var pid in pids)
+            {
+                if (IsProcessAlive(pid)) continue;
+                removed += ClearByProcess(pid);
+                StructureSnapshotStore.ClearByProcess(pid);
+            }
+            return removed;
+        }
+
+        private static bool IsProcessAlive(int pid)
+        {
+            if (pid <= 0) return false;
+            try
+            {
+                using var p = Process.GetProcessById(pid);
+                return !p.HasExited;
+            }
+            catch
+            {
+                return false; // not found / access issues — treat as gone
+            }
+        }
+
         /// <summary>
         /// Number of registered elements.
         /// </summary>
@@ -238,18 +290,17 @@ namespace UiAutomationGRPC.Server.Helpers
         }
 
         /// <summary>
-        /// Attempts to re-find an element using its stored locator properties (PID +
-        /// AutomationId/Name/ClassName). When several elements share the same locator the result is
+        /// Attempts to re-find an element using its stored locator properties (AutomationId/Name/
+        /// ClassName), searching only under the owning process's top-level windows — a desktop-wide
+        /// <c>TreeScope.Descendants</c> walk forces UIA to visit every other app's tree and is the
+        /// most expensive query it has. When several elements share the same locator the result is
         /// disambiguated by RuntimeId. Returns null if nothing matching is currently live.
         /// </summary>
         private static AutomationElement TryRefind(CachedElement cached, string runtimeId)
         {
             try
             {
-                var conditions = new List<Condition>
-                {
-                    new PropertyCondition(AutomationElement.ProcessIdProperty, cached.ProcessId)
-                };
+                var conditions = new List<Condition>();
 
                 if (!string.IsNullOrEmpty(cached.AutomationId))
                     conditions.Add(new PropertyCondition(
@@ -263,12 +314,14 @@ namespace UiAutomationGRPC.Server.Helpers
                     conditions.Add(new PropertyCondition(
                         AutomationElement.ClassNameProperty, cached.ClassName));
 
-                // PID alone is too broad to safely identify a single element.
-                if (conditions.Count < 2) return null;
+                // No locator at all (anonymous container) — the RuntimeId walk handles those.
+                if (conditions.Count == 0) return null;
 
-                var condition = new AndCondition(conditions.ToArray());
-                var matches = AutomationElement.RootElement.FindAll(
-                    TreeScope.Descendants, condition);
+                Condition condition = conditions.Count == 1
+                    ? conditions[0]
+                    : new AndCondition(conditions.ToArray());
+
+                var matches = FindInProcess(cached.ProcessId, condition);
 
                 if (matches.Count == 0) return null;
                 if (matches.Count == 1) return matches[0];
@@ -276,7 +329,7 @@ namespace UiAutomationGRPC.Server.Helpers
                 // Multiple locator matches — prefer the one whose RuntimeId still matches.
                 if (!string.IsNullOrEmpty(runtimeId))
                 {
-                    foreach (AutomationElement m in matches)
+                    foreach (var m in matches)
                     {
                         try
                         {
@@ -297,10 +350,9 @@ namespace UiAutomationGRPC.Server.Helpers
         }
 
         /// <summary>
-        /// Last-resort resolution: walk the owning process's element tree and return the element whose
-        /// RuntimeId matches. A <see cref="PropertyCondition"/> on RuntimeId is not reliably supported
-        /// by UIA, so we filter by PID and compare RuntimeIds during the walk. Scoped to one process
-        /// to keep the search bounded.
+        /// Last-resort resolution: walk the owning process's element trees and return the element
+        /// whose RuntimeId matches. A <see cref="PropertyCondition"/> on RuntimeId is not reliably
+        /// supported by UIA, so we walk the process subtrees and compare RuntimeIds.
         /// </summary>
         private static AutomationElement FindByRuntimeId(int processId, string runtimeId)
         {
@@ -308,9 +360,7 @@ namespace UiAutomationGRPC.Server.Helpers
 
             try
             {
-                var pidCondition = new PropertyCondition(AutomationElement.ProcessIdProperty, processId);
-                var all = AutomationElement.RootElement.FindAll(TreeScope.Descendants, pidCondition);
-                foreach (AutomationElement e in all)
+                foreach (var e in FindInProcess(processId, Condition.TrueCondition))
                 {
                     try
                     {
@@ -325,6 +375,40 @@ namespace UiAutomationGRPC.Server.Helpers
                 Trace.WriteLine($"[ElementCache] FindByRuntimeId failed for PID={processId}: {ex.Message}");
             }
             return null;
+        }
+
+        /// <summary>
+        /// Finds elements matching <paramref name="condition"/> under the process's top-level
+        /// windows only: one cheap PID-filtered scan of the desktop's direct children, then
+        /// subtree searches scoped to those windows. Never walks other applications' trees.
+        /// </summary>
+        private static List<AutomationElement> FindInProcess(int processId, Condition condition)
+        {
+            var matches = new List<AutomationElement>();
+
+            AutomationElementCollection topLevels;
+            try
+            {
+                var pidCondition = new PropertyCondition(AutomationElement.ProcessIdProperty, processId);
+                topLevels = AutomationElement.RootElement.FindAll(TreeScope.Children, pidCondition);
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"[ElementCache] Top-level window scan failed for PID={processId}: {ex.Message}");
+                return matches;
+            }
+
+            foreach (AutomationElement top in topLevels)
+            {
+                try
+                {
+                    foreach (AutomationElement m in top.FindAll(TreeScope.Subtree, condition))
+                        matches.Add(m);
+                }
+                catch (ElementNotAvailableException) { /* window closed mid-search */ }
+            }
+
+            return matches;
         }
 
         /// <summary>

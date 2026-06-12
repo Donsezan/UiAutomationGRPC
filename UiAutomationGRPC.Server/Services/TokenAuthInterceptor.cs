@@ -72,6 +72,19 @@ public class TokenAuthInterceptor : Interceptor
 
     private bool IsValidToken(string token)
     {
-        return _validTokens.Contains(token, StringComparer.Ordinal);
+        // Constant-time comparison so response timing cannot be used to probe token bytes.
+        // No early exit on match: every configured token is compared every time.
+        var tokenBytes = System.Text.Encoding.UTF8.GetBytes(token);
+        bool valid = false;
+        foreach (var candidate in _validTokens)
+        {
+            var candidateBytes = System.Text.Encoding.UTF8.GetBytes(candidate);
+            if (tokenBytes.Length == candidateBytes.Length &&
+                System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(tokenBytes, candidateBytes))
+            {
+                valid = true;
+            }
+        }
+        return valid;
     }
 }
