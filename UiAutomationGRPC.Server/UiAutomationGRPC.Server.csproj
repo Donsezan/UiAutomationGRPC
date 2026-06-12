@@ -6,12 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
-    <UseWPF>true</UseWPF>
     <OutputType>Exe</OutputType>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="FlaUI.UIA3" Version="5.0.0" />
     <PackageReference Include="Grpc.AspNetCore.HealthChecks" Version="2.62.0" />
     <PackageReference Include="Grpc.AspNetCore.Server.Reflection" Version="2.62.0" />
     <PackageReference Include="Grpc.Tools" Version="2.62.0">

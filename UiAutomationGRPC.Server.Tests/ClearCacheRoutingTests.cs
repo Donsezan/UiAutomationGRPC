@@ -13,7 +13,7 @@ namespace UiAutomationGRPC.Server.Tests
     ///
     /// These are pure cache-state tests — no live UIA session required.
     /// Cache entries are injected via the overload that accepts pre-read locator metadata,
-    /// so no real <see cref="System.Windows.Automation.AutomationElement"/> is needed.
+    /// so no real <see cref="FlaUI.Core.AutomationElements.AutomationElement"/> is needed.
     /// </summary>
     [TestFixture]
     public class ClearCacheRoutingTests

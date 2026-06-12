@@ -1,9 +1,10 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
-using System.Windows.Automation;
+using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Conditions;
+using FlaUI.Core.Definitions;
 using Trace = System.Diagnostics.Trace;
-using PropertyCondition = System.Windows.Automation.PropertyCondition;
 
 namespace UiAutomationGRPC.Server.Helpers
 {
@@ -95,11 +96,11 @@ namespace UiAutomationGRPC.Server.Helpers
             // Enabled: probe liveness via a fast COM call, re-find if the handle went stale.
             try
             {
-                _ = cached.Element.Current.ProcessId;
+                _ = cached.Element.Properties.ProcessId.Value;
                 element = cached.Element;
                 return true;
             }
-            catch (ElementNotAvailableException)
+            catch (Exception ex) when (UiaRuntime.IsStaleElement(ex))
             {
                 Trace.WriteLine($"[ElementCache] Element '{runtimeId}' is stale (PID={cached.ProcessId}, Name='{cached.Name}'). Attempting re-find.");
                 var refound = ReResolve(cached, runtimeId);
@@ -124,21 +125,21 @@ namespace UiAutomationGRPC.Server.Helpers
         /// </summary>
         public static string CacheElement(AutomationElement element)
         {
-            string runtimeId = string.Join(",", element.GetRuntimeId());
+            string runtimeId = UiaRuntime.RuntimeIdOf(element);
 
             try
             {
                 _cache[runtimeId] = new CachedElement
                 {
                     Element = element,
-                    AutomationId = element.Current.AutomationId ?? "",
-                    Name = element.Current.Name ?? "",
-                    ClassName = element.Current.ClassName ?? "",
-                    ControlTypeName = element.Current.ControlType.ProgrammaticName,
-                    ProcessId = element.Current.ProcessId
+                    AutomationId = element.Properties.AutomationId.ValueOrDefault ?? "",
+                    Name = element.Properties.Name.ValueOrDefault ?? "",
+                    ClassName = element.Properties.ClassName.ValueOrDefault ?? "",
+                    ControlTypeName = AutomationMapper.ControlTypeName(element.Properties.ControlType.ValueOrDefault),
+                    ProcessId = element.Properties.ProcessId.ValueOrDefault
                 };
             }
-            catch (ElementNotAvailableException)
+            catch (Exception ex) when (UiaRuntime.IsStaleElement(ex))
             {
                 // Element died between discovery and caching — skip
             }
@@ -147,8 +148,8 @@ namespace UiAutomationGRPC.Server.Helpers
 
         /// <summary>
         /// Registers an element using locator values the caller has ALREADY read (e.g. from a
-        /// <see cref="System.Windows.Automation.CacheRequest"/> batch), avoiding the per-property
-        /// COM round-trips that the <see cref="CacheElement(AutomationElement)"/> overload incurs.
+        /// <see cref="FlaUI.Core.CacheRequest"/> batch), avoiding the per-property COM round-trips
+        /// that the <see cref="CacheElement(AutomationElement)"/> overload incurs.
         /// Stores metadata in both modes. Returns the supplied <paramref name="runtimeId"/> unchanged.
         /// </summary>
         public static string CacheElement(
@@ -300,24 +301,22 @@ namespace UiAutomationGRPC.Server.Helpers
         {
             try
             {
-                var conditions = new List<Condition>();
+                var lib = UiaRuntime.Properties;
+                var conditions = new List<ConditionBase>();
 
                 if (!string.IsNullOrEmpty(cached.AutomationId))
-                    conditions.Add(new PropertyCondition(
-                        AutomationElement.AutomationIdProperty, cached.AutomationId));
+                    conditions.Add(new PropertyCondition(lib.Element.AutomationId, cached.AutomationId));
 
                 if (!string.IsNullOrEmpty(cached.Name))
-                    conditions.Add(new PropertyCondition(
-                        AutomationElement.NameProperty, cached.Name));
+                    conditions.Add(new PropertyCondition(lib.Element.Name, cached.Name));
 
                 if (!string.IsNullOrEmpty(cached.ClassName))
-                    conditions.Add(new PropertyCondition(
-                        AutomationElement.ClassNameProperty, cached.ClassName));
+                    conditions.Add(new PropertyCondition(lib.Element.ClassName, cached.ClassName));
 
                 // No locator at all (anonymous container) — the RuntimeId walk handles those.
                 if (conditions.Count == 0) return null;
 
-                Condition condition = conditions.Count == 1
+                ConditionBase condition = conditions.Count == 1
                     ? conditions[0]
                     : new AndCondition(conditions.ToArray());
 
@@ -333,10 +332,10 @@ namespace UiAutomationGRPC.Server.Helpers
                     {
                         try
                         {
-                            if (string.Join(",", m.GetRuntimeId()) == runtimeId)
+                            if (UiaRuntime.RuntimeIdOf(m) == runtimeId)
                                 return m;
                         }
-                        catch (ElementNotAvailableException) { }
+                        catch (Exception ex) when (UiaRuntime.IsStaleElement(ex)) { }
                     }
                 }
 
@@ -360,14 +359,14 @@ namespace UiAutomationGRPC.Server.Helpers
 
             try
             {
-                foreach (var e in FindInProcess(processId, Condition.TrueCondition))
+                foreach (var e in FindInProcess(processId, TrueCondition.Default))
                 {
                     try
                     {
-                        if (string.Join(",", e.GetRuntimeId()) == runtimeId)
+                        if (UiaRuntime.RuntimeIdOf(e) == runtimeId)
                             return e;
                     }
-                    catch (ElementNotAvailableException) { }
+                    catch (Exception ex) when (UiaRuntime.IsStaleElement(ex)) { }
                 }
             }
             catch (Exception ex)
@@ -382,15 +381,15 @@ namespace UiAutomationGRPC.Server.Helpers
         /// windows only: one cheap PID-filtered scan of the desktop's direct children, then
         /// subtree searches scoped to those windows. Never walks other applications' trees.
         /// </summary>
-        private static List<AutomationElement> FindInProcess(int processId, Condition condition)
+        private static List<AutomationElement> FindInProcess(int processId, ConditionBase condition)
         {
             var matches = new List<AutomationElement>();
 
-            AutomationElementCollection topLevels;
+            AutomationElement[] topLevels;
             try
             {
-                var pidCondition = new PropertyCondition(AutomationElement.ProcessIdProperty, processId);
-                topLevels = AutomationElement.RootElement.FindAll(TreeScope.Children, pidCondition);
+                var pidCondition = new PropertyCondition(UiaRuntime.Properties.Element.ProcessId, processId);
+                topLevels = UiaRuntime.Desktop.FindAll(TreeScope.Children, pidCondition);
             }
             catch (Exception ex)
             {
@@ -398,14 +397,13 @@ namespace UiAutomationGRPC.Server.Helpers
                 return matches;
             }
 
-            foreach (AutomationElement top in topLevels)
+            foreach (var top in topLevels)
             {
                 try
                 {
-                    foreach (AutomationElement m in top.FindAll(TreeScope.Subtree, condition))
-                        matches.Add(m);
+                    matches.AddRange(top.FindAll(TreeScope.Subtree, condition));
                 }
-                catch (ElementNotAvailableException) { /* window closed mid-search */ }
+                catch (Exception ex) when (UiaRuntime.IsStaleElement(ex)) { /* window closed mid-search */ }
             }
 
             return matches;
@@ -419,10 +417,10 @@ namespace UiAutomationGRPC.Server.Helpers
             if (element == null) return false;
             try
             {
-                _ = element.Current.ProcessId;
+                _ = element.Properties.ProcessId.Value;
                 return true;
             }
-            catch (ElementNotAvailableException)
+            catch (Exception ex) when (UiaRuntime.IsStaleElement(ex))
             {
                 return false;
             }

@@ -1,29 +1,31 @@
+using FlaUI.Core.Definitions;
 using Google.Protobuf.Collections;
 using NUnit.Framework;
 using UiAutomation;
 using UiAutomationGRPC.Server.Helpers;
-using WinAuto = System.Windows.Automation;
+using FlaConditions = FlaUI.Core.Conditions;
 
 namespace UiAutomationGRPC.Server.Tests
 {
     /// <summary>
     /// Tests for <see cref="AutomationMapper"/> pure-logic methods.
-    /// None of these tests require a live UI Automation session — they only create
-    /// condition/property objects that are initialised from static fields.
+    /// None of these tests require a live UI Automation session — FlaUI condition and
+    /// identifier objects are plain managed objects (the UIA3 COM session is only touched
+    /// when a condition is actually used in a Find call).
     /// </summary>
     [TestFixture]
     public class AutomationMapperTests
     {
         // ────────────────────────────── MapScope ──────────────────────────────
 
-        [TestCase(TreeScope.Children, WinAuto.TreeScope.Children)]
-        [TestCase(TreeScope.Descendants, WinAuto.TreeScope.Descendants)]
-        [TestCase(TreeScope.Subtree, WinAuto.TreeScope.Subtree)]
-        [TestCase(TreeScope.Parent, WinAuto.TreeScope.Parent)]
-        [TestCase(TreeScope.Ancestors, WinAuto.TreeScope.Ancestors)]
-        [TestCase(TreeScope.Element, WinAuto.TreeScope.Element)]
+        [TestCase(UiAutomation.TreeScope.Children, FlaUI.Core.Definitions.TreeScope.Children)]
+        [TestCase(UiAutomation.TreeScope.Descendants, FlaUI.Core.Definitions.TreeScope.Descendants)]
+        [TestCase(UiAutomation.TreeScope.Subtree, FlaUI.Core.Definitions.TreeScope.Subtree)]
+        [TestCase(UiAutomation.TreeScope.Parent, FlaUI.Core.Definitions.TreeScope.Parent)]
+        [TestCase(UiAutomation.TreeScope.Ancestors, FlaUI.Core.Definitions.TreeScope.Ancestors)]
+        [TestCase(UiAutomation.TreeScope.Element, FlaUI.Core.Definitions.TreeScope.Element)]
         public void MapScope_MapsEachProtoValueToMatchingUiaScope(
-            TreeScope proto, WinAuto.TreeScope expected)
+            UiAutomation.TreeScope proto, FlaUI.Core.Definitions.TreeScope expected)
         {
             Assert.That(AutomationMapper.MapScope(proto), Is.EqualTo(expected));
         }
@@ -31,8 +33,8 @@ namespace UiAutomationGRPC.Server.Tests
         [Test]
         public void MapScope_UnknownValue_FallsBackToChildren()
         {
-            Assert.That(AutomationMapper.MapScope((TreeScope)99),
-                Is.EqualTo(WinAuto.TreeScope.Children));
+            Assert.That(AutomationMapper.MapScope((UiAutomation.TreeScope)99),
+                Is.EqualTo(FlaUI.Core.Definitions.TreeScope.Children));
         }
 
         // ────────────────────────────── ParseValue ──────────────────────────────
@@ -71,7 +73,7 @@ namespace UiAutomationGRPC.Server.Tests
         public void LookupProperty_Name_ReturnsNameProperty(string input)
         {
             Assert.That(AutomationMapper.LookupProperty(input),
-                Is.SameAs(WinAuto.AutomationElement.NameProperty));
+                Is.EqualTo(UiaRuntime.Properties.Element.Name));
         }
 
         [TestCase("automationid")]
@@ -80,7 +82,7 @@ namespace UiAutomationGRPC.Server.Tests
         public void LookupProperty_AutomationId_ReturnsAutomationIdProperty(string input)
         {
             Assert.That(AutomationMapper.LookupProperty(input),
-                Is.SameAs(WinAuto.AutomationElement.AutomationIdProperty));
+                Is.EqualTo(UiaRuntime.Properties.Element.AutomationId));
         }
 
         [TestCase("classname")]
@@ -88,28 +90,28 @@ namespace UiAutomationGRPC.Server.Tests
         public void LookupProperty_ClassName_ReturnsClassNameProperty(string input)
         {
             Assert.That(AutomationMapper.LookupProperty(input),
-                Is.SameAs(WinAuto.AutomationElement.ClassNameProperty));
+                Is.EqualTo(UiaRuntime.Properties.Element.ClassName));
         }
 
         [Test]
         public void LookupProperty_ControlType_ReturnsControlTypeProperty()
         {
             Assert.That(AutomationMapper.LookupProperty("controltype"),
-                Is.SameAs(WinAuto.AutomationElement.ControlTypeProperty));
+                Is.EqualTo(UiaRuntime.Properties.Element.ControlType));
         }
 
         [Test]
         public void LookupProperty_IsEnabled_ReturnsIsEnabledProperty()
         {
             Assert.That(AutomationMapper.LookupProperty("isenabled"),
-                Is.SameAs(WinAuto.AutomationElement.IsEnabledProperty));
+                Is.EqualTo(UiaRuntime.Properties.Element.IsEnabled));
         }
 
         [Test]
         public void LookupProperty_BoundingRectangle_ReturnsBoundingRectangleProperty()
         {
             Assert.That(AutomationMapper.LookupProperty("boundingrectangle"),
-                Is.SameAs(WinAuto.AutomationElement.BoundingRectangleProperty));
+                Is.EqualTo(UiaRuntime.Properties.Element.BoundingRectangle));
         }
 
         [Test]
@@ -118,36 +120,81 @@ namespace UiAutomationGRPC.Server.Tests
             Assert.Throws<ArgumentException>(() => AutomationMapper.LookupProperty("doesnotexist"));
         }
 
+        // ────────────────────────────── MapControlTypeValue ──────────────────────────────
+        // Control-type condition values arrive in three shapes; all must land on the enum.
+
+        [TestCase("Window", ControlType.Window)]
+        [TestCase("button", ControlType.Button)]
+        [TestCase("ControlType.Window", ControlType.Window)]
+        [TestCase("ControlType.Edit", ControlType.Edit)]
+        public void MapControlTypeValue_StringForms_MapToEnum(string input, ControlType expected)
+        {
+            Assert.That(AutomationMapper.MapControlTypeValue(input), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void MapControlTypeValue_NativeUiaId_MapsToEnum()
+        {
+            // 50032 = UIA_WindowControlTypeId, 50004 = UIA_EditControlTypeId
+            Assert.Multiple(() =>
+            {
+                Assert.That(AutomationMapper.MapControlTypeValue(50032), Is.EqualTo(ControlType.Window));
+                Assert.That(AutomationMapper.MapControlTypeValue(50004), Is.EqualTo(ControlType.Edit));
+            });
+        }
+
+        [Test]
+        public void MapControlTypeValue_NativeUiaIdAsString_MapsToEnum()
+        {
+            Assert.That(AutomationMapper.MapControlTypeValue("50032"), Is.EqualTo(ControlType.Window));
+        }
+
+        [Test]
+        public void MapControlTypeValue_UnknownString_ReturnsValueUnchanged()
+        {
+            Assert.That(AutomationMapper.MapControlTypeValue("NoSuchControlType"),
+                Is.EqualTo("NoSuchControlType"));
+        }
+
+        // ────────────────────────────── ControlTypeName ──────────────────────────────
+
+        [Test]
+        public void ControlTypeName_KeepsUia2ProgrammaticNameFormat()
+        {
+            Assert.That(AutomationMapper.ControlTypeName(ControlType.Button),
+                Is.EqualTo("ControlType.Button"));
+        }
+
         // ────────────────────────────── MapCondition ──────────────────────────────
 
         [Test]
         public void MapCondition_Null_ReturnsTrueCondition()
         {
             Assert.That(AutomationMapper.MapCondition(null!),
-                Is.SameAs(WinAuto.Condition.TrueCondition));
+                Is.SameAs(FlaConditions.TrueCondition.Default));
         }
 
         [Test]
         public void MapCondition_EmptyProto_ReturnsTrueCondition()
         {
-            Assert.That(AutomationMapper.MapCondition(new Condition()),
-                Is.SameAs(WinAuto.Condition.TrueCondition));
+            Assert.That(AutomationMapper.MapCondition(new UiAutomation.Condition()),
+                Is.SameAs(FlaConditions.TrueCondition.Default));
         }
 
         [Test]
         public void MapCondition_TrueCondition_ReturnsTrueCondition()
         {
-            var proto = new Condition { TrueCondition = true };
+            var proto = new UiAutomation.Condition { TrueCondition = true };
             Assert.That(AutomationMapper.MapCondition(proto),
-                Is.SameAs(WinAuto.Condition.TrueCondition));
+                Is.SameAs(FlaConditions.TrueCondition.Default));
         }
 
         [Test]
         public void MapCondition_PropertyConditionByName_ReturnsPropertyCondition()
         {
-            var proto = new Condition
+            var proto = new UiAutomation.Condition
             {
-                PropertyCondition = new PropertyCondition
+                PropertyCondition = new UiAutomation.PropertyCondition
                 {
                     PropertyName = "name",
                     PropertyValue = "Notepad",
@@ -155,15 +202,15 @@ namespace UiAutomationGRPC.Server.Tests
                 }
             };
             Assert.That(AutomationMapper.MapCondition(proto),
-                Is.TypeOf<WinAuto.PropertyCondition>());
+                Is.TypeOf<FlaConditions.PropertyCondition>());
         }
 
         [Test]
         public void MapCondition_PropertyConditionByAutomationId_ReturnsPropertyCondition()
         {
-            var proto = new Condition
+            var proto = new UiAutomation.Condition
             {
-                PropertyCondition = new PropertyCondition
+                PropertyCondition = new UiAutomation.PropertyCondition
                 {
                     PropertyName = "automationid",
                     PropertyValue = "btn_ok",
@@ -171,15 +218,15 @@ namespace UiAutomationGRPC.Server.Tests
                 }
             };
             Assert.That(AutomationMapper.MapCondition(proto),
-                Is.TypeOf<WinAuto.PropertyCondition>());
+                Is.TypeOf<FlaConditions.PropertyCondition>());
         }
 
         [Test]
         public void MapCondition_PropertyConditionBoolValue_ReturnsPropertyCondition()
         {
-            var proto = new Condition
+            var proto = new UiAutomation.Condition
             {
-                PropertyCondition = new PropertyCondition
+                PropertyCondition = new UiAutomation.PropertyCondition
                 {
                     PropertyName = "isenabled",
                     PropertyValue = "true",
@@ -187,59 +234,79 @@ namespace UiAutomationGRPC.Server.Tests
                 }
             };
             Assert.That(AutomationMapper.MapCondition(proto),
-                Is.TypeOf<WinAuto.PropertyCondition>());
+                Is.TypeOf<FlaConditions.PropertyCondition>());
+        }
+
+        [Test]
+        public void MapCondition_ControlTypeCondition_NormalizesValueToEnum()
+        {
+            var proto = new UiAutomation.Condition
+            {
+                PropertyCondition = new UiAutomation.PropertyCondition
+                {
+                    PropertyName = "controltype",
+                    PropertyValue = "ControlType.Window",
+                    PropertyType = PropertyType.String
+                }
+            };
+
+            var mapped = AutomationMapper.MapCondition(proto);
+
+            Assert.That(mapped, Is.TypeOf<FlaConditions.PropertyCondition>());
+            Assert.That(((FlaConditions.PropertyCondition)mapped).Value,
+                Is.EqualTo(ControlType.Window));
         }
 
         [Test]
         public void MapCondition_AndCondition_ReturnsAndCondition()
         {
             var boolCond = new BoolCondition();
-            boolCond.Conditions.Add(new Condition { TrueCondition = true });
-            boolCond.Conditions.Add(new Condition { TrueCondition = true });
-            var proto = new Condition { AndCondition = boolCond };
+            boolCond.Conditions.Add(new UiAutomation.Condition { TrueCondition = true });
+            boolCond.Conditions.Add(new UiAutomation.Condition { TrueCondition = true });
+            var proto = new UiAutomation.Condition { AndCondition = boolCond };
 
             Assert.That(AutomationMapper.MapCondition(proto),
-                Is.TypeOf<WinAuto.AndCondition>());
+                Is.TypeOf<FlaConditions.AndCondition>());
         }
 
         [Test]
         public void MapCondition_OrCondition_ReturnsOrCondition()
         {
             var boolCond = new BoolCondition();
-            boolCond.Conditions.Add(new Condition { TrueCondition = true });
-            boolCond.Conditions.Add(new Condition { TrueCondition = true });
-            var proto = new Condition { OrCondition = boolCond };
+            boolCond.Conditions.Add(new UiAutomation.Condition { TrueCondition = true });
+            boolCond.Conditions.Add(new UiAutomation.Condition { TrueCondition = true });
+            var proto = new UiAutomation.Condition { OrCondition = boolCond };
 
             Assert.That(AutomationMapper.MapCondition(proto),
-                Is.TypeOf<WinAuto.OrCondition>());
+                Is.TypeOf<FlaConditions.OrCondition>());
         }
 
         [Test]
         public void MapCondition_NotCondition_ReturnsNotCondition()
         {
-            var proto = new Condition
+            var proto = new UiAutomation.Condition
             {
-                NotCondition = new Condition { TrueCondition = true }
+                NotCondition = new UiAutomation.Condition { TrueCondition = true }
             };
 
             Assert.That(AutomationMapper.MapCondition(proto),
-                Is.TypeOf<WinAuto.NotCondition>());
+                Is.TypeOf<FlaConditions.NotCondition>());
         }
 
         [Test]
         public void MapCondition_NestedAndInsideNot_ReturnsNotCondition()
         {
             var boolCond = new BoolCondition();
-            boolCond.Conditions.Add(new Condition { TrueCondition = true });
-            boolCond.Conditions.Add(new Condition { TrueCondition = true });
+            boolCond.Conditions.Add(new UiAutomation.Condition { TrueCondition = true });
+            boolCond.Conditions.Add(new UiAutomation.Condition { TrueCondition = true });
 
-            var proto = new Condition
+            var proto = new UiAutomation.Condition
             {
-                NotCondition = new Condition { AndCondition = boolCond }
+                NotCondition = new UiAutomation.Condition { AndCondition = boolCond }
             };
 
             Assert.That(AutomationMapper.MapCondition(proto),
-                Is.TypeOf<WinAuto.NotCondition>());
+                Is.TypeOf<FlaConditions.NotCondition>());
         }
 
         // ────────────────────────────── MapConditionList ──────────────────────────────
@@ -247,17 +314,17 @@ namespace UiAutomationGRPC.Server.Tests
         [Test]
         public void MapConditionList_Empty_ReturnsEmptyList()
         {
-            var field = new RepeatedField<Condition>();
+            var field = new RepeatedField<UiAutomation.Condition>();
             Assert.That(AutomationMapper.MapConditionList(field), Is.Empty);
         }
 
         [Test]
         public void MapConditionList_TwoTrueConditions_ReturnsTwoEntries()
         {
-            var field = new RepeatedField<Condition>
+            var field = new RepeatedField<UiAutomation.Condition>
             {
-                new Condition { TrueCondition = true },
-                new Condition { TrueCondition = true }
+                new UiAutomation.Condition { TrueCondition = true },
+                new UiAutomation.Condition { TrueCondition = true }
             };
             Assert.That(AutomationMapper.MapConditionList(field), Has.Count.EqualTo(2));
         }
@@ -266,14 +333,14 @@ namespace UiAutomationGRPC.Server.Tests
         public void MapConditionList_MixedTypes_MapsEachCorrectly()
         {
             var boolCond = new BoolCondition();
-            boolCond.Conditions.Add(new Condition { TrueCondition = true });
-            boolCond.Conditions.Add(new Condition { TrueCondition = true });
+            boolCond.Conditions.Add(new UiAutomation.Condition { TrueCondition = true });
+            boolCond.Conditions.Add(new UiAutomation.Condition { TrueCondition = true });
 
-            var field = new RepeatedField<Condition>
+            var field = new RepeatedField<UiAutomation.Condition>
             {
-                new Condition { TrueCondition = true },
-                new Condition { AndCondition = boolCond },
-                new Condition { NotCondition = new Condition { TrueCondition = true } }
+                new UiAutomation.Condition { TrueCondition = true },
+                new UiAutomation.Condition { AndCondition = boolCond },
+                new UiAutomation.Condition { NotCondition = new UiAutomation.Condition { TrueCondition = true } }
             };
 
             var result = AutomationMapper.MapConditionList(field);
@@ -281,9 +348,9 @@ namespace UiAutomationGRPC.Server.Tests
             Assert.Multiple(() =>
             {
                 Assert.That(result, Has.Count.EqualTo(3));
-                Assert.That(result[0], Is.SameAs(WinAuto.Condition.TrueCondition));
-                Assert.That(result[1], Is.TypeOf<WinAuto.AndCondition>());
-                Assert.That(result[2], Is.TypeOf<WinAuto.NotCondition>());
+                Assert.That(result[0], Is.SameAs(FlaConditions.TrueCondition.Default));
+                Assert.That(result[1], Is.TypeOf<FlaConditions.AndCondition>());
+                Assert.That(result[2], Is.TypeOf<FlaConditions.NotCondition>());
             });
         }
     }

@@ -1,5 +1,5 @@
 using System.Runtime.InteropServices;
-using System.Windows.Automation;
+using FlaUI.Core.AutomationElements;
 using UiAutomationGRPC.Server.Handlers;
 using Trace = System.Diagnostics.Trace;
 
@@ -8,7 +8,7 @@ namespace UiAutomationGRPC.Server.Helpers
     /// <summary>
     /// Best-effort foreground activation for the window that owns a target element.
     ///
-    /// <c>AutomationElement.SetFocus()</c> alone cannot bring a background window forward —
+    /// <c>AutomationElement.Focus()</c> alone cannot bring a background window forward —
     /// Windows' foreground-lock rules silently ignore it, so synthesized keys/clicks land in the
     /// wrong app (the classic "send_keys did nothing" failure). Restore the window if minimized,
     /// try <c>SetForegroundWindow</c>, and when the lock denies it, attach to the current
@@ -26,16 +26,16 @@ namespace UiAutomationGRPC.Server.Helpers
             try
             {
                 var window = ScreenshotHandler.GetTopLevelWindow(element) ?? element;
-                int handle = (int)window.GetCurrentPropertyValue(AutomationElement.NativeWindowHandleProperty);
-                if (handle == 0) return true; // windowless host — cannot verify, do not block
+                IntPtr handle = window.Properties.NativeWindowHandle.ValueOrDefault;
+                if (handle == IntPtr.Zero) return true; // windowless host — cannot verify, do not block
 
                 IntPtr fg = GetForegroundWindow();
-                if (fg == new IntPtr(handle)) return true;
+                if (fg == handle) return true;
 
                 // The foreground window may be a child/owned popup of the same process tree
                 // (e.g. a dialog) — same app, still fine.
                 GetWindowThreadProcessId(fg, out uint fgPid);
-                int targetPid = (int)window.GetCurrentPropertyValue(AutomationElement.ProcessIdProperty);
+                int targetPid = window.Properties.ProcessId.ValueOrDefault;
                 return fgPid == targetPid;
             }
             catch (Exception ex)
@@ -51,40 +51,76 @@ namespace UiAutomationGRPC.Server.Helpers
             {
                 var window = ScreenshotHandler.GetTopLevelWindow(element) ?? element;
 
-                int handle = 0;
-                try { handle = (int)window.GetCurrentPropertyValue(AutomationElement.NativeWindowHandleProperty); }
+                IntPtr hwnd = IntPtr.Zero;
+                try { hwnd = window.Properties.NativeWindowHandle.ValueOrDefault; }
                 catch (Exception ex) { Trace.WriteLine($"[WindowFocus] NativeWindowHandle read failed: {ex.Message}"); }
-                if (handle == 0) return; // windowless host (some XAML islands) — nothing to activate
+                if (hwnd == IntPtr.Zero) return; // windowless host (some XAML islands) — nothing to activate
 
-                var hwnd = new IntPtr(handle);
                 if (GetForegroundWindow() == hwnd) return;
 
                 if (IsIconic(hwnd))
                     ShowWindow(hwnd, SW_RESTORE);
 
-                if (SetForegroundWindow(hwnd)) return;
+                // UIA2's managed SetFocus used the client-side Win32 proxy, which raised the
+                // window to the foreground as a side effect — UIA3's native SetFocus does not,
+                // so this activation must succeed on its own (the SendKeys foreground check
+                // refuses to type otherwise).
+                if (SetForegroundWindow(hwnd) && GetForegroundWindow() == hwnd) return;
 
-                // Foreground lock denied the switch — attach to the owner of the current
-                // foreground window's input queue and retry.
-                IntPtr currentFg = GetForegroundWindow();
-                if (currentFg == IntPtr.Zero) return;
-
-                uint fgThread = GetWindowThreadProcessId(currentFg, out _);
+                // Foreground lock denied the switch — attach to the input queues of BOTH the
+                // current foreground owner and the target window, then retry. Attaching only
+                // to the foreground thread is often not enough for BringWindowToTop to take.
                 uint ourThread = GetCurrentThreadId();
-                if (fgThread != ourThread && AttachThreadInput(ourThread, fgThread, true))
+                IntPtr currentFg = GetForegroundWindow();
+                uint fgThread = currentFg != IntPtr.Zero ? GetWindowThreadProcessId(currentFg, out _) : 0;
+                uint targetThread = GetWindowThreadProcessId(hwnd, out _);
+
+                bool fgAttached = fgThread != 0 && fgThread != ourThread
+                                  && AttachThreadInput(ourThread, fgThread, true);
+                bool targetAttached = targetThread != 0 && targetThread != ourThread && targetThread != fgThread
+                                      && AttachThreadInput(ourThread, targetThread, true);
+                try
                 {
-                    try { SetForegroundWindow(hwnd); }
-                    finally { AttachThreadInput(ourThread, fgThread, false); }
+                    BringWindowToTop(hwnd);
+                    SetForegroundWindow(hwnd);
+                }
+                finally
+                {
+                    if (targetAttached) AttachThreadInput(ourThread, targetThread, false);
+                    if (fgAttached) AttachThreadInput(ourThread, fgThread, false);
+                }
+
+                if (GetForegroundWindow() == hwnd) return;
+
+                // Last resort: the ALT-key trick — an in-flight ALT keypress releases the
+                // foreground lock for the caller (the classic automation-framework workaround).
+                // ALT is released immediately, so no modifier state leaks into later input.
+                keybd_event(VK_MENU, 0, 0, UIntPtr.Zero);
+                try
+                {
+                    SetForegroundWindow(hwnd);
+                }
+                finally
+                {
+                    keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
                 }
             }
             catch (Exception ex)
             {
-                // Never fail the action because activation didn't work — SetFocus may still suffice.
+                // Never fail the action because activation didn't work — Focus may still suffice.
                 Trace.WriteLine($"[WindowFocus] EnsureForeground failed (non-fatal): {ex.Message}");
             }
         }
 
         private const int SW_RESTORE = 9;
+        private const byte VK_MENU = 0x12;
+        private const uint KEYEVENTF_KEYUP = 0x0002;
+
+        [DllImport("user32.dll")]
+        private static extern bool BringWindowToTop(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();

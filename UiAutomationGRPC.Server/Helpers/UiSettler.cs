@@ -1,5 +1,7 @@
 using System.Diagnostics;
-using System.Windows.Automation;
+using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Definitions;
+using FlaUI.Core.EventHandlers;
 using Trace = System.Diagnostics.Trace;
 
 namespace UiAutomationGRPC.Server.Helpers
@@ -44,16 +46,15 @@ namespace UiAutomationGRPC.Server.Helpers
             double ticksPerMs = Stopwatch.Frequency / 1000.0;
             var tracker = new QuiescenceTracker(Stopwatch.GetTimestamp());
 
-            StructureChangedEventHandler structureHandler = (_, _) => tracker.RecordChange(Stopwatch.GetTimestamp());
-            AutomationPropertyChangedEventHandler propertyHandler = (_, _) => tracker.RecordChange(Stopwatch.GetTimestamp());
-
-            bool structureSubscribed = false, propertySubscribed = false;
+            StructureChangedEventHandlerBase structureHandler = null;
+            PropertyChangedEventHandlerBase propertyHandler = null;
             try
             {
                 try
                 {
-                    Automation.AddStructureChangedEventHandler(root, TreeScope.Subtree, structureHandler);
-                    structureSubscribed = true;
+                    structureHandler = root.RegisterStructureChangedEvent(
+                        TreeScope.Subtree,
+                        (_, _, _) => tracker.RecordChange(Stopwatch.GetTimestamp()));
                 }
                 catch (Exception ex)
                 {
@@ -62,17 +63,18 @@ namespace UiAutomationGRPC.Server.Helpers
 
                 try
                 {
-                    Automation.AddAutomationPropertyChangedEventHandler(
-                        root, TreeScope.Subtree, propertyHandler,
-                        AutomationElement.NameProperty, ValuePattern.ValueProperty);
-                    propertySubscribed = true;
+                    var lib = UiaRuntime.Properties;
+                    propertyHandler = root.RegisterPropertyChangedEvent(
+                        TreeScope.Subtree,
+                        (_, _, _) => tracker.RecordChange(Stopwatch.GetTimestamp()),
+                        lib.Element.Name, lib.Value.Value);
                 }
                 catch (Exception ex)
                 {
                     Trace.WriteLine($"[UiSettler] Property event subscription failed: {ex.Message}");
                 }
 
-                if (!structureSubscribed && !propertySubscribed)
+                if (structureHandler == null && propertyHandler == null)
                 {
                     // No event feed at all — keep the legacy fixed delay.
                     Thread.Sleep(FallbackSettleMs);
@@ -90,14 +92,14 @@ namespace UiAutomationGRPC.Server.Helpers
             }
             finally
             {
-                if (structureSubscribed)
+                if (structureHandler != null)
                 {
-                    try { Automation.RemoveStructureChangedEventHandler(root, structureHandler); }
+                    try { root.FrameworkAutomationElement.UnregisterStructureChangedEventHandler(structureHandler); }
                     catch (Exception ex) { Trace.WriteLine($"[UiSettler] Structure event unsubscribe failed: {ex.Message}"); }
                 }
-                if (propertySubscribed)
+                if (propertyHandler != null)
                 {
-                    try { Automation.RemoveAutomationPropertyChangedEventHandler(root, propertyHandler); }
+                    try { root.FrameworkAutomationElement.UnregisterPropertyChangedEventHandler(propertyHandler); }
                     catch (Exception ex) { Trace.WriteLine($"[UiSettler] Property event unsubscribe failed: {ex.Message}"); }
                 }
             }

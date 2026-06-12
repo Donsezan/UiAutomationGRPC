@@ -1,5 +1,5 @@
 using Grpc.Core;
-using System.Windows.Automation;
+using FlaUI.Core.AutomationElements;
 using UiAutomation;
 using UiAutomationGRPC.Server.Helpers;
 
@@ -25,7 +25,7 @@ namespace UiAutomationGRPC.Server.Handlers
             try
             {
                 // 1. Resolve Start Element
-                AutomationElement startElement = AutomationElement.RootElement;
+                AutomationElement startElement = UiaRuntime.Desktop;
                 if (!string.IsNullOrEmpty(request.StartRuntimeId))
                 {
                     if (!ElementCache.TryGetLive(request.StartRuntimeId, out startElement))
@@ -35,10 +35,10 @@ namespace UiAutomationGRPC.Server.Handlers
                 }
 
                 // 2. Build Condition
-                System.Windows.Automation.Condition condition = AutomationMapper.MapCondition(request.Condition);
+                var condition = AutomationMapper.MapCondition(request.Condition);
 
                 // 3. Determine Scope
-                System.Windows.Automation.TreeScope scope = AutomationMapper.MapScope(request.Scope);
+                var scope = AutomationMapper.MapScope(request.Scope);
 
                 // 4. Find
                 AutomationElement foundElement = startElement.FindFirst(scope, condition);
@@ -49,7 +49,7 @@ namespace UiAutomationGRPC.Server.Handlers
                 }
 
                 // 5. Validate interaction access against the owning process
-                var blocked = InteractionAccessGuard.CheckAccess(_guard, foundElement.Current.ProcessId);
+                var blocked = InteractionAccessGuard.CheckAccess(_guard, foundElement.Properties.ProcessId.ValueOrDefault);
                 if (blocked != null)
                     return new ElementResponse { Success = false, Message = blocked };
 
@@ -66,7 +66,7 @@ namespace UiAutomationGRPC.Server.Handlers
             try
             {
                 // 1. Resolve Root Element
-                AutomationElement root = AutomationElement.RootElement;
+                AutomationElement root = UiaRuntime.Desktop;
                 if (!string.IsNullOrEmpty(request.RuntimeId))
                 {
                     if (!ElementCache.TryGetLive(request.RuntimeId, out root))
@@ -78,7 +78,7 @@ namespace UiAutomationGRPC.Server.Handlers
                 // 2. Validate interaction access
                 if (!string.IsNullOrEmpty(request.RuntimeId))
                 {
-                    var blocked = InteractionAccessGuard.CheckAccess(_guard, root.Current.ProcessId);
+                    var blocked = InteractionAccessGuard.CheckAccess(_guard, root.Properties.ProcessId.ValueOrDefault);
                     if (blocked != null)
                         return new ElementListResponse { Success = false, Message = blocked };
                 }
@@ -92,7 +92,7 @@ namespace UiAutomationGRPC.Server.Handlers
                     Message = $"Found {children.Count} children."
                 };
 
-                foreach (AutomationElement element in children)
+                foreach (var element in children)
                 {
                     response.Elements.Add(AutomationMapper.MapToResponse(element));
                 }
@@ -113,7 +113,7 @@ namespace UiAutomationGRPC.Server.Handlers
             }
 
             // Validate interaction access
-            var blocked = InteractionAccessGuard.CheckAccess(_guard, element.Current.ProcessId);
+            var blocked = InteractionAccessGuard.CheckAccess(_guard, element.Properties.ProcessId.ValueOrDefault);
             if (blocked != null)
                 return new GetPropertyResponse { Success = false, Message = blocked };
 
@@ -126,28 +126,30 @@ namespace UiAutomationGRPC.Server.Handlers
                 if (request.PropertyName.Equals("Value", StringComparison.OrdinalIgnoreCase) ||
                     request.PropertyName.Equals("Text", StringComparison.OrdinalIgnoreCase))
                 {
-                    if (element.TryGetCurrentPattern(ValuePattern.Pattern, out object vpObj))
+                    var valuePattern = element.Patterns.Value.PatternOrDefault;
+                    if (valuePattern != null)
                     {
                         return new GetPropertyResponse
                         {
                             Success = true,
-                            Value = ((ValuePattern)vpObj).Current.Value ?? "",
+                            Value = valuePattern.Value.ValueOrDefault ?? "",
                             Message = "Retrieved (ValuePattern)"
                         };
                     }
-                    if (element.TryGetCurrentPattern(TextPattern.Pattern, out object tpObj))
+                    var textPattern = element.Patterns.Text.PatternOrDefault;
+                    if (textPattern != null)
                     {
                         return new GetPropertyResponse
                         {
                             Success = true,
-                            Value = ((TextPattern)tpObj).DocumentRange.GetText(-1) ?? "",
+                            Value = textPattern.DocumentRange.GetText(-1) ?? "",
                             Message = "Retrieved (TextPattern)"
                         };
                     }
                 }
 
-                AutomationProperty property = AutomationMapper.LookupProperty(request.PropertyName);
-                object val = element.GetCurrentPropertyValue(property);
+                var property = AutomationMapper.LookupProperty(request.PropertyName);
+                object val = element.FrameworkAutomationElement.GetPropertyValue(property);
 
                 return new GetPropertyResponse
                 {
@@ -168,7 +170,7 @@ namespace UiAutomationGRPC.Server.Handlers
         public static List<AutomationElement> GetChildElements(AutomationElement parent)
         {
             var children = new List<AutomationElement>();
-            var walker = TreeWalker.ControlViewWalker;
+            var walker = UiaRuntime.Automation.TreeWalkerFactory.GetControlViewWalker();
             var child = walker.GetFirstChild(parent);
             while (child != null)
             {
