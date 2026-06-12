@@ -200,6 +200,10 @@ namespace UiAutomationGRPC.Server.Handlers
                     if (blocked != null)
                         return new PerformActionResponse { Success = false, Message = blocked };
 
+                    // SetFocus alone cannot raise a background window (foreground-lock rules) —
+                    // bring the owning window forward first so the keys land in the right app.
+                    WindowFocus.EnsureForeground(target);
+
                     try
                     {
                         target.SetFocus();
@@ -238,6 +242,7 @@ namespace UiAutomationGRPC.Server.Handlers
         /// </summary>
         public static bool ClickElementAtCenter(AutomationElement element, bool rightClick = false)
         {
+            WindowFocus.EnsureForeground(element);
             try { element.SetFocus(); } catch (Exception ex) { System.Diagnostics.Trace.WriteLine($"[ActionHandler] SetFocus failed (non-fatal): {ex.Message}"); }
 
             if (!TryGetClickablePoint(element, out Point pt))
