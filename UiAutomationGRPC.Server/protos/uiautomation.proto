@@ -30,6 +30,10 @@ service UiAutomationService {
   // Gets immediate children of an element
   rpc GetChildren (GetChildrenRequest) returns (ElementListResponse);
 
+  // Polls for an element matching a condition until it appears or the timeout elapses.
+  // One round trip replaces the client-side "retry find_element" loop (slow + token-hungry for LLM agents).
+  rpc WaitForElement (WaitForElementRequest) returns (ElementResponse);
+
   // Sends keys to the active application
   rpc SendKeys (SendKeysRequest) returns (PerformActionResponse);
 
@@ -73,6 +77,14 @@ message FindElementRequest {
 
 message GetChildrenRequest {
     string runtime_id = 1; // Optional, defaults to desktop if empty
+}
+
+message WaitForElementRequest {
+  string start_runtime_id = 1;  // Empty for Desktop
+  Condition condition = 2;
+  TreeScope scope = 3;
+  int32 timeout_ms = 4;         // Total wait budget. 0 = server default (10000); clamped to <= 120000.
+  int32 poll_interval_ms = 5;   // Delay between probes. 0 = server default (250); clamped to [50, 5000].
 }
 
 enum TreeScope {

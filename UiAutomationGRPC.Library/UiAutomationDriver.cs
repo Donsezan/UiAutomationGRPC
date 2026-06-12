@@ -203,6 +203,27 @@ public sealed class UiAutomationDriver : IDisposable, IAsyncDisposable
         => await Client.FindElementAsync(request);
 
     /// <summary>
+    /// Waits (server-side) until an element matching the condition appears, or the timeout elapses.
+    /// Replaces client-side find/retry loops — one RPC, the server polls the live UI tree.
+    /// </summary>
+    /// <param name="request">The find condition / scope / start element, as for <see cref="FindElementAsync"/>.</param>
+    /// <param name="timeoutMs">Total wait budget in ms. 0 uses the server default (10 s); capped server-side at 120 s.</param>
+    /// <param name="pollIntervalMs">Delay between probes in ms. 0 uses the server default (250 ms).</param>
+    /// <returns>The element response; <c>Success</c> is false if the element never appeared.</returns>
+    public async Task<ElementResponse> WaitForElementAsync(FindElementRequest request, int timeoutMs = 0, int pollIntervalMs = 0)
+    {
+        var waitRequest = new WaitForElementRequest
+        {
+            StartRuntimeId = request.StartRuntimeId,
+            Condition = request.Condition,
+            Scope = request.Scope,
+            TimeoutMs = timeoutMs,
+            PollIntervalMs = pollIntervalMs
+        };
+        return await Client.WaitForElementAsync(waitRequest);
+    }
+
+    /// <summary>
     /// Gets children of an element.
     /// </summary>
     /// <param name="runtimeId">The runtime ID of the parent element.</param>

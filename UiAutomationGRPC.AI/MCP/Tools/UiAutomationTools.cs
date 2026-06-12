@@ -113,6 +113,44 @@ public static class UiAutomationTools
         }, !resp.Success);
     }
 
+    [McpServerTool(Name = "wait_for_element"), Description("Waits until an element matching a property condition appears, or the timeout elapses. Use this right after open_app (or after an action that opens a window/dialog) instead of retrying find_element in a loop — one call, the server polls the live UI tree. Returns the element's runtime_id on success.")]
+    public static async Task<CallToolResult> WaitForElement(
+        UiAutomationService.UiAutomationServiceClient client,
+        [Description("Property to match on, e.g. 'Name', 'AutomationId', 'ControlType', 'ClassName'.")] string propertyName,
+        [Description("Value the property must equal.")] string propertyValue,
+        [Description("Total wait budget in milliseconds (default 10000, max 120000).")] int timeoutMs = 0,
+        [Description("Optional runtime_id to search under; empty searches from the desktop root.")] string? startRuntimeId = null,
+        [Description("Search scope: ELEMENT, CHILDREN, DESCENDANTS (default), SUBTREE, PARENT, ANCESTORS.")] string? scope = null,
+        CancellationToken ct = default)
+    {
+        var resp = await client.WaitForElementAsync(new WaitForElementRequest
+        {
+            StartRuntimeId = startRuntimeId ?? "",
+            Scope = ParseEnum(scope, TreeScope.Descendants),
+            TimeoutMs = timeoutMs,
+            Condition = new Condition
+            {
+                PropertyCondition = new PropertyCondition
+                {
+                    PropertyName = propertyName,
+                    PropertyValue = propertyValue,
+                    PropertyType = PropertyType.String
+                }
+            }
+        }, cancellationToken: ct);
+
+        return Json(new
+        {
+            success = resp.Success,
+            message = resp.Message,
+            runtime_id = resp.RuntimeId,
+            name = resp.Name,
+            automation_id = resp.AutomationId,
+            class_name = resp.ClassName,
+            control_type = resp.ControlType
+        }, !resp.Success);
+    }
+
     [McpServerTool(Name = "get_children"), Description("Returns the immediate child elements of an element (or of the desktop when runtime_id is empty), each with its runtime_id and identifying properties.")]
     public static async Task<CallToolResult> GetChildren(
         UiAutomationService.UiAutomationServiceClient client,

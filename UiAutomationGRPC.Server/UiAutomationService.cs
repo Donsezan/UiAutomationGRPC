@@ -51,6 +51,45 @@ namespace UiAutomationGRPC.Server
         public override Task<ElementListResponse> GetChildren(GetChildrenRequest request, ServerCallContext context)
             => _executor.RunAsync(() => _elementHandler.GetChildren(request, context), context.CancellationToken);
 
+        // The wait loop deliberately lives OFF the UIA worker: each probe is enqueued as its own
+        // short work item and the inter-probe delay runs on the request thread, so a long wait
+        // never starves other clients of the single worker.
+        public override async Task<ElementResponse> WaitForElement(WaitForElementRequest request, ServerCallContext context)
+        {
+            var (timeoutMs, pollMs) = WaitPolicy.Normalize(request.TimeoutMs, request.PollIntervalMs);
+            var findRequest = new FindElementRequest
+            {
+                StartRuntimeId = request.StartRuntimeId,
+                Condition = request.Condition,
+                Scope = request.Scope
+            };
+
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            ElementResponse last;
+            while (true)
+            {
+                try
+                {
+                    last = await _executor.RunAsync(() => _elementHandler.FindElement(findRequest, context), context.CancellationToken);
+                    if (last.Success)
+                        return last;
+                }
+                catch (RpcException ex) when (ex.StatusCode == StatusCode.ResourceExhausted)
+                {
+                    // Worker queue momentarily full — treat as a missed probe and keep waiting.
+                    last = new ElementResponse { Success = false, Message = "UI automation worker busy during probe." };
+                }
+
+                if (stopwatch.ElapsedMilliseconds + pollMs > timeoutMs)
+                    break;
+
+                await Task.Delay(pollMs, context.CancellationToken);
+            }
+
+            last.Message = $"Element did not appear within {timeoutMs} ms ({last.Message})";
+            return last;
+        }
+
         public override Task<GetPropertyResponse> GetProperty(GetPropertyRequest request, ServerCallContext context)
             => _executor.RunAsync(() => _elementHandler.GetProperty(request, context), context.CancellationToken);
 
