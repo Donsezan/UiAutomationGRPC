@@ -234,9 +234,10 @@ namespace UiAutomationGRPC.Server.Handlers
                     var window = ScreenshotHandler.GetTopLevelWindow(element);
                     if (window != null)
                     {
-                        // Let the UI settle after the action. We hold the worker for this window
+                        // Let the UI settle after the action (event-driven quiescence with a hard
+                        // cap for continuously-updating apps). We hold the worker for this window
                         // intentionally so no other operation interleaves before the refreshed read.
-                        Thread.Sleep(200);
+                        UiSettler.WaitForQuiet(window, effective.SettleQuietMs, effective.SettleMaxMs);
 
                         // Scoped rebuild: return only the subtree the client cares about.
                         // Resolve AFTER the action + settle so the scope element reflects the new state.
