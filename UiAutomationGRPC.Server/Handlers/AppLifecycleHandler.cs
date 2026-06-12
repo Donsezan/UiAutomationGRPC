@@ -28,13 +28,13 @@ namespace UiAutomationGRPC.Server.Handlers
         /// Launches an application and returns its process ID.
         /// </summary>
         /// <remarks>
-        /// <para><b>UWP / Store apps:</b> for packaged apps launched via an alias (e.g. <c>calc</c>,
-        /// which resolves to <c>CalculatorApp</c>), Windows starts the app through a host/launcher
-        /// process and <see cref="System.Diagnostics.Process.Start(System.Diagnostics.ProcessStartInfo)"/>
-        /// returns that launcher's PID — not the PID that owns the visible window. As a result the
-        /// returned <c>ProcessId</c> may not be usable with <c>GetAppStructure</c>/<c>TakeScreenshot</c>
-        /// by PID. For UWP apps prefer calling <c>GetAppStructure</c> by <c>app_name</c>, which resolves
-        /// the real top-level window. Classic Win32 apps return the correct PID.</para>
+        /// <para><b>UWP / Store apps:</b> for packaged apps launched via an alias (e.g. <c>calc</c>),
+        /// Windows starts the app through a host/launcher process whose PID exits almost
+        /// immediately. When that happens the handler resolves the PID of the newly-appeared
+        /// top-level window via <see cref="UwpPidResolver"/> and returns that instead, so the
+        /// returned <c>ProcessId</c> works with PID-addressed RPCs for both Win32 and UWP apps.
+        /// Resolution is best-effort: if no new window appears within the budget, the launcher
+        /// PID is returned with a warning in the message.</para>
         /// </remarks>
         public Task<OpenAppResponse> OpenApp(AppRequest request, ServerCallContext context)
         {
@@ -61,6 +61,10 @@ namespace UiAutomationGRPC.Server.Handlers
                     fileName = resolvedPath;
                 }
 
+                // Snapshot visible top-level windows BEFORE launching so a UWP launcher's real
+                // window can be identified by diff if the launcher exits (see UwpPidResolver).
+                var windowsBefore = UwpPidResolver.VisibleTopLevelWindowPids();
+
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = fileName,
@@ -68,10 +72,18 @@ namespace UiAutomationGRPC.Server.Handlers
                     UseShellExecute = true
                 };
                 var process = Process.Start(startInfo);
-                int pid = process?.Id ?? 0;
 
-                _logger.LogInformation("OpenApp succeeded: AppName='{AppName}', PID={ProcessId}", request.AppName, pid);
-                return Task.FromResult(new OpenAppResponse { Success = true, Message = "App started", ProcessId = pid });
+                var (pid, resolved, launcherExited) = UwpPidResolver.ResolveLaunchedPid(process, windowsBefore);
+                string message = resolved
+                    ? "App started (launcher exited; process_id resolved to the new window's owner)"
+                    : launcherExited
+                        ? "App started, but the launched process already exited and no new window was found — " +
+                          "the returned process_id may be stale. Address the app by name, or use WaitForElement."
+                        : "App started";
+
+                _logger.LogInformation("OpenApp succeeded: AppName='{AppName}', PID={ProcessId} (resolved={Resolved})",
+                    request.AppName, pid, resolved);
+                return Task.FromResult(new OpenAppResponse { Success = true, Message = message, ProcessId = pid });
             }
             catch (Exception ex)
             {
