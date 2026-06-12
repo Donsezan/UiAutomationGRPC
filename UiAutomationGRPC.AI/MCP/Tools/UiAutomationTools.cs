@@ -66,6 +66,7 @@ public static class UiAutomationTools
         [Description("Optional: override the server's depth cap for this request (>0).")] int maxDepth = 0,
         [Description("Optional: override the server's node cap for this request (>0).")] int maxNodes = 0,
         [Description("Optional: include offscreen elements for this request.")] bool? includeOffscreen = null,
+        [Description("Optional: return only nodes added/changed/removed since the previous look at this window ({\"Diff\":true,...}). Falls back to the full tree when there is no previous snapshot.")] bool diffMode = false,
         CancellationToken ct = default)
     {
         var resp = await client.GetAppStructureAsync(new AppStructureRequest
@@ -73,7 +74,7 @@ public static class UiAutomationTools
             UseProcessId = useProcessId,
             ProcessId = processId,
             AppName = appName ?? "",
-            StructureOptions = BuildStructureOptions(scopeRuntimeId, maxDepth, maxNodes, includeOffscreen)
+            StructureOptions = BuildStructureOptions(scopeRuntimeId, maxDepth, maxNodes, includeOffscreen, diffMode)
         }, cancellationToken: ct);
         return Text(resp.Success ? resp.JsonStructure : resp.Message, !resp.Success);
     }
@@ -211,10 +212,11 @@ public static class UiAutomationTools
         [Description("Optional: return only the subtree under this element (runtime_id) instead of the whole window.")] string? scopeRuntimeId = null,
         [Description("Optional: override the server's depth cap for this request (>0).")] int maxDepth = 0,
         [Description("Optional: override the server's node cap for this request (>0).")] int maxNodes = 0,
+        [Description("Optional: return only nodes added/changed/removed since the previous look at this window instead of the full tree — strongly recommended for big apps.")] bool diffMode = false,
         CancellationToken ct = default)
     {
         var request = BuildActionRequest(runtimeId, action, arguments);
-        request.StructureOptions = BuildStructureOptions(scopeRuntimeId, maxDepth, maxNodes, includeOffscreen: null);
+        request.StructureOptions = BuildStructureOptions(scopeRuntimeId, maxDepth, maxNodes, includeOffscreen: null, diffMode);
         var resp = await client.PerformActionWithStructureAsync(request, cancellationToken: ct);
         return Text(resp.Success ? resp.JsonStructure : resp.Message, !resp.Success);
     }
@@ -309,13 +311,14 @@ public static class UiAutomationTools
         return req;
     }
 
-    private static StructureOptions BuildStructureOptions(string? scopeRuntimeId, int maxDepth, int maxNodes, bool? includeOffscreen)
+    private static StructureOptions BuildStructureOptions(string? scopeRuntimeId, int maxDepth, int maxNodes, bool? includeOffscreen, bool diffMode = false)
     {
         var options = new StructureOptions
         {
             ScopeRuntimeId = scopeRuntimeId ?? "",
             MaxDepth = maxDepth,
-            MaxNodes = maxNodes
+            MaxNodes = maxNodes,
+            DiffMode = diffMode
         };
         if (includeOffscreen.HasValue)
             options.IncludeOffscreen = includeOffscreen.Value;

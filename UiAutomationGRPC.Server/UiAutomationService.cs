@@ -134,17 +134,23 @@ namespace UiAutomationGRPC.Server
             {
                 _logger.LogInformation("ClearCache requested: scope=ByName, AppName='{AppName}'", request.AppName);
                 removed = Helpers.ElementCache.ClearByName(request.AppName);
+
+                string name = Helpers.ElementCache.StripExeExtension(request.AppName);
+                foreach (var p in System.Diagnostics.Process.GetProcessesByName(name))
+                    Helpers.StructureSnapshotStore.ClearByProcess(p.Id);
             }
             else if (request.ProcessId > 0)
             {
                 _logger.LogInformation("ClearCache requested: scope=ByProcess, PID={ProcessId}", request.ProcessId);
                 removed = Helpers.ElementCache.ClearByProcess(request.ProcessId);
+                Helpers.StructureSnapshotStore.ClearByProcess(request.ProcessId);
             }
             else
             {
                 _logger.LogInformation("ClearCache requested: scope=All");
                 removed = Helpers.ElementCache.Count;
                 Helpers.ElementCache.Clear();
+                Helpers.StructureSnapshotStore.Clear();
             }
 
             _logger.LogInformation("ClearCache completed: {Removed} element(s) removed", removed);

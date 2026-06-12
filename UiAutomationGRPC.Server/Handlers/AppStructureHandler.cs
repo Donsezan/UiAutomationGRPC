@@ -59,11 +59,13 @@ namespace UiAutomationGRPC.Server.Handlers
                         return new AppStructureResponse { Success = false, Message = scopeBlocked };
 
                     var (scopedNode, scopedCtx) = BuildTree(scopeElement, context.CancellationToken, effective);
+                    var scopedJson = SerializeWithDiff(scopedNode, scopeElement.Current.ProcessId,
+                        request.StructureOptions?.DiffMode == true, effective, out var scopedNote);
                     return new AppStructureResponse
                     {
                         Success = true,
-                        JsonStructure = Serialize(scopedNode, effective),
-                        Message = DescribeResult(scopedCtx)
+                        JsonStructure = scopedJson,
+                        Message = DescribeResult(scopedCtx) + scopedNote
                     };
                 }
 
@@ -203,9 +205,10 @@ namespace UiAutomationGRPC.Server.Handlers
                 catch (System.Windows.Automation.ElementNotAvailableException) { }
 
                 var (rootNode, ctx) = BuildTree(rootMapElement, context.CancellationToken, effective);
-                var json = Serialize(rootNode, effective);
+                var json = SerializeWithDiff(rootNode, rootMapElement.Current.ProcessId,
+                    request.StructureOptions?.DiffMode == true, effective, out var note);
 
-                return new AppStructureResponse { Success = true, JsonStructure = json, Message = DescribeResult(ctx) };
+                return new AppStructureResponse { Success = true, JsonStructure = json, Message = DescribeResult(ctx) + note };
             }
             catch (OperationCanceledException)
             {
@@ -251,8 +254,9 @@ namespace UiAutomationGRPC.Server.Handlers
                         catch (System.Windows.Automation.ElementNotAvailableException) { }
 
                         var (rootNode, ctx) = BuildTree(rebuildRoot, context.CancellationToken, effective);
-                        var json = Serialize(rootNode, effective);
-                        return new AppStructureResponse { Success = true, JsonStructure = json, Message = $"Action performed. {DescribeResult(ctx)}" };
+                        var json = SerializeWithDiff(rootNode, window.Current.ProcessId,
+                            request.StructureOptions?.DiffMode == true, effective, out var note);
+                        return new AppStructureResponse { Success = true, JsonStructure = json, Message = $"Action performed. {DescribeResult(ctx)}{note}" };
                     }
                 }
             }
@@ -445,6 +449,33 @@ namespace UiAutomationGRPC.Server.Handlers
 
         private string Serialize(AppNode root, AppStructureOptions? options = null) =>
             JsonConvert.SerializeObject(root, (options ?? _options).CompactJson ? Formatting.None : Formatting.Indented, _jsonSettings);
+
+        /// <summary>
+        /// Serializes the build result, honouring diff_mode: when a previous snapshot of the same
+        /// root exists, only added/changed/removed nodes are returned. The fresh tree is always
+        /// stored as the next diff base — including on non-diff calls, so a plain "See" followed
+        /// by diff-mode actions works naturally.
+        /// </summary>
+        private string SerializeWithDiff(AppNode rootNode, int pid, bool diffMode, AppStructureOptions effective, out string note)
+        {
+            note = "";
+            var previous = diffMode ? StructureSnapshotStore.Get(rootNode.UniqId) : null;
+            StructureSnapshotStore.Set(rootNode.UniqId, pid, rootNode);
+
+            if (!diffMode)
+                return Serialize(rootNode, effective);
+
+            if (previous == null)
+            {
+                note = " Diff requested but no previous snapshot existed; returned the full tree.";
+                return Serialize(rootNode, effective);
+            }
+
+            var diff = StructureDiff.Compute(previous, rootNode);
+            if (diff.IsEmpty)
+                note = " No UI changes since the previous snapshot.";
+            return JsonConvert.SerializeObject(diff, effective.CompactJson ? Formatting.None : Formatting.Indented, _jsonSettings);
+        }
 
         private static string DescribeResult(BuildContext ctx) =>
             ctx.Truncated
