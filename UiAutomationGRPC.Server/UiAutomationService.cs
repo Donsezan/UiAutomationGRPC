@@ -125,6 +125,34 @@ namespace UiAutomationGRPC.Server
         public override Task<ReflectionResponse> Reflect(ReflectionRequest request, ServerCallContext context)
             => _executor.RunAsync(() => _reflectionHandler.Reflect(request, context), context.CancellationToken);
 
+        // Server Status (no UIA — answered directly, even when the worker is saturated)
+        public override Task<ServerStatusResponse> GetServerStatus(ServerStatusRequest request, ServerCallContext context)
+        {
+            int sessionId;
+            try { sessionId = System.Diagnostics.Process.GetCurrentProcess().SessionId; }
+            catch { sessionId = -1; }
+
+            bool interactive = sessionId != 0 && Environment.UserInteractive;
+            string message = interactive
+                ? "OK"
+                : "WARNING: server runs in a non-interactive session (Session 0 / service). " +
+                  "It cannot see or drive the user desktop — UIA reads and synthesized input will not work. " +
+                  "Run the server in the user's interactive session.";
+
+            return Task.FromResult(new ServerStatusResponse
+            {
+                Success = true,
+                Message = message,
+                PendingRequests = _executor.Pending,
+                QueueCapacity = _executor.MaxQueueDepth,
+                CachedElements = Helpers.ElementCache.Count,
+                CacheEnabled = Helpers.ElementCache.Enabled,
+                SessionId = sessionId,
+                InteractiveSession = interactive,
+                ServerVersion = typeof(UiAutomationService).Assembly.GetName().Version?.ToString() ?? "unknown"
+            });
+        }
+
         // Cache Management
         public override Task<PerformActionResponse> ClearCache(ClearCacheRequest request, ServerCallContext context)
         {

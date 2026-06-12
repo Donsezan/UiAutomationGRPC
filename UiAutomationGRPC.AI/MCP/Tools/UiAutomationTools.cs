@@ -31,7 +31,7 @@ public static class UiAutomationTools
 
     // ---------------------------------------------------------------- App lifecycle
 
-    [McpServerTool(Name = "open_app"), Description("Launches an application by name or executable path. Returns the launched process id. Note: for UWP/Store apps (e.g. 'calc') the returned PID may be a launcher/host process — prefer addressing such apps by name in get_app_structure.")]
+    [McpServerTool(Name = "open_app", Destructive = false, OpenWorld = true), Description("Launches an application by name or executable path. Returns the launched process id. Note: for UWP/Store apps (e.g. 'calc') the returned PID may be a launcher/host process — prefer addressing such apps by name in get_app_structure.")]
     public static async Task<CallToolResult> OpenApp(
         UiAutomationService.UiAutomationServiceClient client,
         [Description("Executable path or app name (e.g. 'notepad', 'calc').")] string appName,
@@ -43,7 +43,7 @@ public static class UiAutomationTools
         return Json(new { success = resp.Success, message = resp.Message, process_id = resp.ProcessId }, !resp.Success);
     }
 
-    [McpServerTool(Name = "close_app"), Description("Closes a running application by its process id.")]
+    [McpServerTool(Name = "close_app", Destructive = true), Description("Closes a running application by its process id.")]
     public static async Task<CallToolResult> CloseApp(
         UiAutomationService.UiAutomationServiceClient client,
         [Description("Process id of the application to close.")] int processId,
@@ -56,7 +56,7 @@ public static class UiAutomationTools
 
     // ---------------------------------------------------------------- See
 
-    [McpServerTool(Name = "get_app_structure"), Description("Returns the UI tree of an application as a compact JSON string. Address the app either by process id (set useProcessId=true) or by name. Use this as the 'See' step of a See -> Think -> Act loop. For large apps prefer a scoped/shallow request (scopeRuntimeId / maxDepth) — it is faster and uses far fewer tokens.")]
+    [McpServerTool(Name = "get_app_structure", ReadOnly = true), Description("Returns the UI tree of an application as a compact JSON string. Address the app either by process id (set useProcessId=true) or by name. Use this as the 'See' step of a See -> Think -> Act loop. For large apps prefer a scoped/shallow request (scopeRuntimeId / maxDepth) — it is faster and uses far fewer tokens.")]
     public static async Task<CallToolResult> GetAppStructure(
         UiAutomationService.UiAutomationServiceClient client,
         [Description("Set true to look the app up by process_id; false to look it up by app_name.")] bool useProcessId,
@@ -79,7 +79,7 @@ public static class UiAutomationTools
         return Text(resp.Success ? resp.JsonStructure : resp.Message, !resp.Success);
     }
 
-    [McpServerTool(Name = "find_element"), Description("Finds a single element by a property condition (e.g. Name, AutomationId, ControlType, ClassName). Returns the element's runtime_id for use in other tools. Optionally scope the search under a known element via start_runtime_id.")]
+    [McpServerTool(Name = "find_element", ReadOnly = true), Description("Finds a single element by a property condition (e.g. Name, AutomationId, ControlType, ClassName). Returns the element's runtime_id for use in other tools. Optionally scope the search under a known element via start_runtime_id.")]
     public static async Task<CallToolResult> FindElement(
         UiAutomationService.UiAutomationServiceClient client,
         [Description("Property to match on, e.g. 'Name', 'AutomationId', 'ControlType', 'ClassName'.")] string propertyName,
@@ -119,7 +119,7 @@ public static class UiAutomationTools
         }, !resp.Success);
     }
 
-    [McpServerTool(Name = "wait_for_element"), Description("Waits until an element matching a property condition appears, or the timeout elapses. Use this right after open_app (or after an action that opens a window/dialog) instead of retrying find_element in a loop — one call, the server polls the live UI tree. Returns the element's runtime_id on success.")]
+    [McpServerTool(Name = "wait_for_element", ReadOnly = true), Description("Waits until an element matching a property condition appears, or the timeout elapses. Use this right after open_app (or after an action that opens a window/dialog) instead of retrying find_element in a loop — one call, the server polls the live UI tree. Returns the element's runtime_id on success.")]
     public static async Task<CallToolResult> WaitForElement(
         UiAutomationService.UiAutomationServiceClient client,
         [Description("Property to match on, e.g. 'Name', 'AutomationId', 'ControlType', 'ClassName'.")] string propertyName,
@@ -157,7 +157,7 @@ public static class UiAutomationTools
         }, !resp.Success);
     }
 
-    [McpServerTool(Name = "get_children"), Description("Returns the immediate child elements of an element (or of the desktop when runtime_id is empty), each with its runtime_id and identifying properties.")]
+    [McpServerTool(Name = "get_children", ReadOnly = true), Description("Returns the immediate child elements of an element (or of the desktop when runtime_id is empty), each with its runtime_id and identifying properties.")]
     public static async Task<CallToolResult> GetChildren(
         UiAutomationService.UiAutomationServiceClient client,
         [Description("runtime_id of the parent element; empty for the desktop root.")] string? runtimeId = null,
@@ -177,7 +177,7 @@ public static class UiAutomationTools
         return Json(new { success = resp.Success, message = resp.Message, children }, !resp.Success);
     }
 
-    [McpServerTool(Name = "get_property"), Description("Reads a single UI Automation property (e.g. 'Name', 'IsEnabled', 'Value') of an element by runtime_id.")]
+    [McpServerTool(Name = "get_property", ReadOnly = true), Description("Reads a single UI Automation property (e.g. 'Name', 'IsEnabled', 'Value') of an element by runtime_id.")]
     public static async Task<CallToolResult> GetProperty(
         UiAutomationService.UiAutomationServiceClient client,
         [Description("runtime_id of the target element (from get_app_structure / find_element).")] string runtimeId,
@@ -240,7 +240,7 @@ public static class UiAutomationTools
 
     // ---------------------------------------------------------------- Screenshot (image content)
 
-    [McpServerTool(Name = "take_screenshot"), Description("Captures a screenshot and returns it as image content the model can see. mode='element' captures a single element (runtime_id required); mode='window' captures the element's window, or a process's main window when only process_id is given.")]
+    [McpServerTool(Name = "take_screenshot", ReadOnly = true), Description("Captures a screenshot and returns it as image content the model can see. mode='element' captures a single element (runtime_id required); mode='window' captures the element's window, or a process's main window when only process_id is given.")]
     public static async Task<CallToolResult> TakeScreenshot(
         UiAutomationService.UiAutomationServiceClient client,
         [Description("'element' or 'window'.")] string mode,
@@ -276,7 +276,7 @@ public static class UiAutomationTools
 
     // ---------------------------------------------------------------- Cache
 
-    [McpServerTool(Name = "clear_cache"), Description("Clears the server-side element cache. With no arguments clears everything; pass process_id or app_name to scope it to one application.")]
+    [McpServerTool(Name = "clear_cache", Idempotent = true), Description("Clears the server-side element cache. With no arguments clears everything; pass process_id or app_name to scope it to one application.")]
     public static async Task<CallToolResult> ClearCache(
         UiAutomationService.UiAutomationServiceClient client,
         [Description("Optional: clear cache for this process id only.")] int processId = 0,
@@ -291,6 +291,28 @@ public static class UiAutomationTools
 
         var resp = await client.ClearCacheAsync(req, cancellationToken: ct);
         return Json(new { success = resp.Success, message = resp.Message }, !resp.Success);
+    }
+
+    // ---------------------------------------------------------------- Diagnostics
+
+    [McpServerTool(Name = "get_server_status", ReadOnly = true), Description("Reports gRPC server health: worker queue load, element cache size, and whether the server runs in an interactive session (in Session 0 it CANNOT drive the desktop). Call this first when tools fail mysteriously.")]
+    public static async Task<CallToolResult> GetServerStatus(
+        UiAutomationService.UiAutomationServiceClient client,
+        CancellationToken ct = default)
+    {
+        var resp = await client.GetServerStatusAsync(new ServerStatusRequest(), cancellationToken: ct);
+        return Json(new
+        {
+            success = resp.Success,
+            message = resp.Message,
+            pending_requests = resp.PendingRequests,
+            queue_capacity = resp.QueueCapacity,
+            cached_elements = resp.CachedElements,
+            cache_enabled = resp.CacheEnabled,
+            session_id = resp.SessionId,
+            interactive_session = resp.InteractiveSession,
+            server_version = resp.ServerVersion
+        }, !resp.Success || !resp.InteractiveSession);
     }
 
     // ---------------------------------------------------------------- Helpers

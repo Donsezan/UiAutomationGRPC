@@ -47,6 +47,10 @@ service UiAutomationService {
 
   // Clears the server-side element cache (teardown / memory management)
   rpc ClearCache (ClearCacheRequest) returns (PerformActionResponse);
+
+  // Reports server health/diagnostics: worker queue load, cache size, session interactivity.
+  // Lets a client (or LLM agent) self-diagnose "server busy" / "Session 0 cannot drive the desktop".
+  rpc GetServerStatus (ServerStatusRequest) returns (ServerStatusResponse);
 }
 
 // -- Common --
@@ -261,6 +265,23 @@ message AppStructureResponse {
     string json_structure = 1;
     bool success = 2;
     string message = 3;
+}
+
+// -- Server Status --
+
+message ServerStatusRequest {
+}
+
+message ServerStatusResponse {
+    bool success = 1;
+    string message = 2;             // human-readable warnings (e.g. Session 0)
+    int32 pending_requests = 3;     // queued + running work items on the UIA worker
+    int32 queue_capacity = 4;       // max queue depth before ResourceExhausted
+    int32 cached_elements = 5;      // ElementCache entry count
+    bool cache_enabled = 6;         // RuntimeId resolution strategy flag
+    int32 session_id = 7;           // Windows session of the server process
+    bool interactive_session = 8;   // false => server cannot see/drive the user desktop
+    string server_version = 9;
 }
 
 // -- Cache Management --

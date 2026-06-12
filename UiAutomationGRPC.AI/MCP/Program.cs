@@ -85,7 +85,18 @@ builder.Services.AddSingleton<UiAutomationService.UiAutomationServiceClient>(_ =
 });
 
 builder.Services
-    .AddMcpServer()
+    .AddMcpServer(options => options.ServerInstructions = """
+        Windows UI Automation over gRPC. Core loop (See -> Think -> Act):
+        1. open_app, then wait_for_element on a known element (NOT a sleep/retry loop) — for
+           UWP/Store apps the returned process_id may be a launcher; prefer addressing by name.
+        2. get_app_structure for the UI tree. On large apps pass maxDepth / scopeRuntimeId,
+           and after the first look use diffMode=true to receive only what changed.
+        3. perform_action_with_structure to act AND get the refreshed tree in one call —
+           prefer it over perform_action. Address elements by the runtime_id (UniqId) field.
+        Prefer pattern actions (INVOKE, SET_VALUE, TOGGLE) over coordinate clicks; use send_keys
+        with a runtime_id so keys land on a specific control. If tools fail mysteriously, call
+        get_server_status — a non-interactive (Session 0) server cannot drive the desktop.
+        """)
     .WithStdioServerTransport()
     .WithToolsFromAssembly();
 

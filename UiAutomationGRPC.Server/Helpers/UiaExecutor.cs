@@ -41,6 +41,12 @@ namespace UiAutomationGRPC.Server.Helpers
         // queued + currently running. Used as the backpressure signal.
         private int _pending;
 
+        /// <summary>Queued + currently running work items (diagnostics).</summary>
+        public int Pending => Volatile.Read(ref _pending);
+
+        /// <summary>Configured backlog cap before new work is rejected (diagnostics).</summary>
+        public int MaxQueueDepth => _maxQueueDepth;
+
         // True only on the worker thread, so re-entrant RunAsync calls (a handler that
         // marshals while already running marshaled work) execute inline instead of
         // enqueueing onto the thread they are running on — which would deadlock.
