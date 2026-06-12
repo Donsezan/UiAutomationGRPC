@@ -16,6 +16,35 @@ namespace UiAutomationGRPC.Server.Helpers
     /// </summary>
     public static class WindowFocus
     {
+        /// <summary>
+        /// True when the element's top-level window currently holds the foreground (or when it has
+        /// no resolvable HWND, in which case foreground state cannot be checked and input is
+        /// allowed through). Used to refuse keyboard injection that would land in another app.
+        /// </summary>
+        public static bool IsForeground(AutomationElement element)
+        {
+            try
+            {
+                var window = ScreenshotHandler.GetTopLevelWindow(element) ?? element;
+                int handle = (int)window.GetCurrentPropertyValue(AutomationElement.NativeWindowHandleProperty);
+                if (handle == 0) return true; // windowless host — cannot verify, do not block
+
+                IntPtr fg = GetForegroundWindow();
+                if (fg == new IntPtr(handle)) return true;
+
+                // The foreground window may be a child/owned popup of the same process tree
+                // (e.g. a dialog) — same app, still fine.
+                GetWindowThreadProcessId(fg, out uint fgPid);
+                int targetPid = (int)window.GetCurrentPropertyValue(AutomationElement.ProcessIdProperty);
+                return fgPid == targetPid;
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine($"[WindowFocus] IsForeground check failed (assuming ok): {ex.Message}");
+                return true;
+            }
+        }
+
         public static void EnsureForeground(AutomationElement element)
         {
             try

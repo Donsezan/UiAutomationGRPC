@@ -212,6 +212,23 @@ namespace UiAutomationGRPC.Server.Handlers
                     {
                         return new PerformActionResponse { Success = false, Message = $"Could not focus target element before sending keys: {ex.Message}" };
                     }
+
+                    // Focus moves asynchronously (the app must pump WM_SETFOCUS); injecting
+                    // immediately can land the first keystrokes in the previous focus owner.
+                    Thread.Sleep(50);
+
+                    // SendInput goes to whatever is foreground. If activation lost the race
+                    // (e.g. a user is actively clicking elsewhere), refuse rather than leak
+                    // the keystrokes into the wrong application.
+                    if (!WindowFocus.IsForeground(target))
+                    {
+                        return new PerformActionResponse
+                        {
+                            Success = false,
+                            Message = "Target window could not be brought to the foreground (another window holds focus). " +
+                                      "Keys were NOT sent. Retry when the desktop is idle, or use SET_VALUE for text fields."
+                        };
+                    }
                 }
 
                 VirtualKeyboard.Send(request.Keys, request.Wait);

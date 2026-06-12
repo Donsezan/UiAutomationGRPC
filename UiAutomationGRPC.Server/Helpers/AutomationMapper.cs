@@ -81,6 +81,9 @@ namespace UiAutomationGRPC.Server.Helpers
                 case "controltype": return AutomationElement.ControlTypeProperty;
                 case "isenabled": return AutomationElement.IsEnabledProperty;
                 case "boundingrectangle": return AutomationElement.BoundingRectangleProperty;
+                // Text content of edit/document controls (ValuePattern). Lets GetProperty("Value")
+                // read back what an app displays — the read half of SET_VALUE.
+                case "value": return ValuePattern.ValueProperty;
                 default: throw new ArgumentException($"Unknown property: {name}");
             }
         }

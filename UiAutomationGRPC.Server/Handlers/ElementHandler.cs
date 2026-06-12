@@ -119,6 +119,33 @@ namespace UiAutomationGRPC.Server.Handlers
 
             try
             {
+                // "Value" / "Text" mean "give me the element's text content". Different control
+                // families expose it through different patterns: ValuePattern (WinForms textboxes,
+                // most edits) or TextPattern (Win32 Edit in Notepad, WPF/UWP documents, rich text).
+                // Try both before falling back to a raw property read.
+                if (request.PropertyName.Equals("Value", StringComparison.OrdinalIgnoreCase) ||
+                    request.PropertyName.Equals("Text", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (element.TryGetCurrentPattern(ValuePattern.Pattern, out object vpObj))
+                    {
+                        return new GetPropertyResponse
+                        {
+                            Success = true,
+                            Value = ((ValuePattern)vpObj).Current.Value ?? "",
+                            Message = "Retrieved (ValuePattern)"
+                        };
+                    }
+                    if (element.TryGetCurrentPattern(TextPattern.Pattern, out object tpObj))
+                    {
+                        return new GetPropertyResponse
+                        {
+                            Success = true,
+                            Value = ((TextPattern)tpObj).DocumentRange.GetText(-1) ?? "",
+                            Message = "Retrieved (TextPattern)"
+                        };
+                    }
+                }
+
                 AutomationProperty property = AutomationMapper.LookupProperty(request.PropertyName);
                 object val = element.GetCurrentPropertyValue(property);
 

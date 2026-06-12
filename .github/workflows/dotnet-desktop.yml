@@ -114,6 +114,40 @@ jobs:
 
 
   # -----------------------------
+  #     UI smoke test job
+  # -----------------------------
+  # Drives a real Notepad through the full UIA pipeline (open -> wait -> type ->
+  # read back -> structure -> close). GitHub-hosted Windows runners expose an
+  # interactive desktop, so live UIA + SendInput work here. This catches
+  # See->Think->Act regressions that no unit test can.
+  smoke:
+    needs: build
+    runs-on: windows-latest
+
+    env:
+      Test_Project_Path: UiAutomationGRPC.Server.Tests\UiAutomationGRPC.Server.Tests.csproj
+      UIA_SMOKE: "1"
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Install .NET 8
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 8.0.x
+
+    - name: Run UI smoke tests
+      run: dotnet test ${{ env.Test_Project_Path }} --configuration Debug --filter "TestCategory=Smoke" --logger trx --results-directory SmokeResults
+
+    - name: Upload Smoke Results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: SmokeResults
+        path: SmokeResults
+
+  # -----------------------------
   #        NuGet publish job
   # -----------------------------
   publish:
