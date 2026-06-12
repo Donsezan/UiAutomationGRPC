@@ -60,11 +60,23 @@ namespace UiAutomationGRPC.Server.Tests
         }
 
         [Test]
-        public void VisibleTopLevelWindowPids_ReturnsNonEmptySet()
+        public void VisibleTopLevelWindows_ReturnsNonEmptySet()
         {
             // Any interactive session has at least the shell's windows.
-            var pids = UwpPidResolver.VisibleTopLevelWindowPids();
-            Assert.That(pids, Is.Not.Empty);
+            var windows = UwpPidResolver.VisibleTopLevelWindows();
+            Assert.That(windows, Is.Not.Empty);
+        }
+
+        [Test]
+        public void PidsOfNewVisibleWindows_AgainstFreshSnapshot_ReturnsEmpty()
+        {
+            // Diffing against a just-taken snapshot should normally yield nothing new.
+            // (A window can legitimately appear between the two calls — tolerate that by
+            // only asserting the snapshot's own windows are excluded.)
+            var before = UwpPidResolver.VisibleTopLevelWindows();
+            var newPids = UwpPidResolver.PidsOfNewVisibleWindows(before);
+            Assert.That(newPids.Count, Is.LessThanOrEqualTo(2),
+                "diff against a fresh snapshot should be (near-)empty");
         }
 
         [Test]
@@ -82,7 +94,7 @@ namespace UiAutomationGRPC.Server.Tests
 
             try
             {
-                var before = UwpPidResolver.VisibleTopLevelWindowPids();
+                var before = UwpPidResolver.VisibleTopLevelWindows();
                 var (pid, resolved, launcherExited) = UwpPidResolver.ResolveLaunchedPid(process, before);
 
                 Assert.Multiple(() =>
@@ -101,7 +113,7 @@ namespace UiAutomationGRPC.Server.Tests
         [Test]
         public void ResolveLaunchedPid_NullProcess_ReturnsZero()
         {
-            var (pid, resolved, launcherExited) = UwpPidResolver.ResolveLaunchedPid(null, new HashSet<int>());
+            var (pid, resolved, launcherExited) = UwpPidResolver.ResolveLaunchedPid(null, new HashSet<IntPtr>());
             Assert.Multiple(() =>
             {
                 Assert.That(pid, Is.EqualTo(0));

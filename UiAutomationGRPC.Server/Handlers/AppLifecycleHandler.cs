@@ -63,7 +63,7 @@ namespace UiAutomationGRPC.Server.Handlers
 
                 // Snapshot visible top-level windows BEFORE launching so a UWP launcher's real
                 // window can be identified by diff if the launcher exits (see UwpPidResolver).
-                var windowsBefore = UwpPidResolver.VisibleTopLevelWindowPids();
+                var windowsBefore = UwpPidResolver.VisibleTopLevelWindows();
 
                 var startInfo = new ProcessStartInfo
                 {

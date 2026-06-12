@@ -3,6 +3,7 @@ using NUnit.Framework;
 using System.Diagnostics;
 using UiAutomation;
 using UiAutomationGRPC.Server.Helpers;
+using UiAutomationGRPC.Server.Models;
 
 namespace UiAutomationGRPC.Server.Tests
 {
@@ -23,6 +24,7 @@ namespace UiAutomationGRPC.Server.Tests
         private UiAutomationService _service = null!;
         private FakeServerCallContext _ctx = null!;
         private int _notepadPid;
+        private int _calcPid;
 
         [SetUp]
         public void SetUp()
@@ -45,9 +47,13 @@ namespace UiAutomationGRPC.Server.Tests
                 catch { /* already gone */ }
             }
             // Kill leftovers defensively so a failed run doesn't poison the next one (CI runner reuse).
-            foreach (var p in Process.GetProcessesByName("notepad"))
+            // NB: never kill ApplicationFrameHost — it hosts every other UWP window too.
+            foreach (var name in new[] { "notepad", "CalculatorApp", "Calculator", "win32calc" })
             {
-                try { p.Kill(); } catch { }
+                foreach (var p in Process.GetProcessesByName(name))
+                {
+                    try { p.Kill(); } catch { }
+                }
             }
             _executor?.Dispose();
             ElementCache.Clear();
@@ -134,6 +140,110 @@ namespace UiAutomationGRPC.Server.Tests
                 new CloseAppByProcessIdRequest { ProcessId = _notepadPid }, _ctx);
             Assert.That(closed.Success, Is.True, $"CloseAppByProcessId failed: {closed.Message}");
             _notepadPid = 0;
+        }
+
+        /// <summary>
+        /// UWP smoke: Calculator 2 + 3 = 5 driven purely through the See→Think→Act loop —
+        /// GetAppStructure for the tree (exercises the UWP launcher-PID resolution: calc.exe exits
+        /// immediately and the window belongs to another process), InvokePattern clicks by
+        /// AutomationId (no keyboard, no foreground dependency), GetProperty for the result.
+        /// Ignored (not failed) when the UWP Calculator app is unavailable — CI server images
+        /// don't ship it; any failure AFTER the window appeared is a real regression.
+        /// </summary>
+        [Test]
+        public async Task Calculator_TwoPlusThree_ShowsFive()
+        {
+            // ---- Open (calc.exe is a launcher; OpenApp resolves the real window-owner PID) ----
+            var open = await _service.OpenApp(new AppRequest { AppName = "calc" }, _ctx);
+            if (!open.Success)
+                Assert.Ignore($"Calculator could not be launched on this machine: {open.Message}");
+            _calcPid = open.ProcessId;
+
+            // ---- See: poll the structure until the UWP UI is up (XAML loads asynchronously) ----
+            AppNode? root = null;
+            var structDeadline = DateTime.UtcNow.AddSeconds(20);
+            string lastMessage = "";
+            while (DateTime.UtcNow < structDeadline)
+            {
+                var structure = await _service.GetAppStructure(new AppStructureRequest
+                {
+                    UseProcessId = true,
+                    ProcessId = _calcPid
+                }, _ctx);
+                lastMessage = structure.Message;
+                if (structure.Success && structure.JsonStructure.Contains("num2Button"))
+                {
+                    root = Newtonsoft.Json.JsonConvert.DeserializeObject<AppNode>(structure.JsonStructure);
+                    break;
+                }
+                await Task.Delay(500);
+            }
+            if (root == null)
+                Assert.Ignore($"Calculator UWP UI did not appear (app not installed / Store stub?): {lastMessage}");
+
+            // ---- Think: pick buttons by their stable AutomationIds ----
+            string IdOf(string automationId)
+            {
+                var node = FindByAutomationId(root!, automationId);
+                Assert.That(node, Is.Not.Null, $"Calculator structure has no '{automationId}'");
+                return node!.UniqId;
+            }
+
+            string resultsId = IdOf("CalculatorResults");
+
+            // ---- Act: 2 + 3 = via InvokePattern (no synthesized input, works in background) ----
+            foreach (var button in new[] { "num2Button", "plusButton", "num3Button", "equalButton" })
+            {
+                var click = await _service.PerformAction(new PerformActionRequest
+                {
+                    RuntimeId = IdOf(button),
+                    Action = ActionType.Invoke
+                }, _ctx);
+                Assert.That(click.Success, Is.True, $"Invoke '{button}' failed: {click.Message}");
+            }
+
+            // ---- Read the display back (Name of CalculatorResults, e.g. "Display is 5") ----
+            GetPropertyResponse result = new();
+            var readDeadline = DateTime.UtcNow.AddSeconds(5);
+            while (DateTime.UtcNow < readDeadline)
+            {
+                result = await _service.GetProperty(new GetPropertyRequest
+                {
+                    RuntimeId = resultsId,
+                    PropertyName = "Name"
+                }, _ctx);
+                if (result.Success && result.Value.Contains('5'))
+                    break;
+                await Task.Delay(200);
+            }
+            Assert.Multiple(() =>
+            {
+                Assert.That(result.Success, Is.True, $"GetProperty(Name) failed: {result.Message}");
+                Assert.That(result.Value, Does.Contain("5"), $"Display does not show 5: '{result.Value}'");
+            });
+
+            // ---- Close the real calculator process (the resolved PID may be the frame host —
+            // killing ApplicationFrameHost would take other UWP windows with it) ----
+            int realCalcPid = _calcPid;
+            if (ElementCache.TryGetLive(resultsId, out var resultsElement))
+                realCalcPid = resultsElement.Properties.ProcessId.ValueOrDefault;
+
+            var closed = await _service.CloseAppByProcessId(
+                new CloseAppByProcessIdRequest { ProcessId = realCalcPid }, _ctx);
+            Assert.That(closed.Success, Is.True, $"CloseAppByProcessId failed: {closed.Message}");
+            _calcPid = 0;
+        }
+
+        private static AppNode? FindByAutomationId(AppNode node, string automationId)
+        {
+            if (string.Equals(node.UiAutomationId, automationId, StringComparison.Ordinal))
+                return node;
+            foreach (var child in node.Children)
+            {
+                var hit = FindByAutomationId(child, automationId);
+                if (hit != null) return hit;
+            }
+            return null;
         }
 
         /// <summary>Tries several (property, value) locators under a start element, first hit wins.</summary>

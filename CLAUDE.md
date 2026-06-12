@@ -40,7 +40,8 @@ dotnet test UiAutomationGRPC.Server.Tests
 dotnet test UiAutomationGRPC.Server.Tests --filter "FullyQualifiedName~KeyAccessValidatorTests"
 dotnet test UiAutomationGRPC.Server.Tests --filter "Name=SpecificTestMethod"
 
-# Live UI smoke test (launches a real Notepad and types into it — skipped unless opted in;
+# Live UI smoke tests (launch a real Notepad — typed input — and the UWP Calculator —
+# InvokePattern clicks; skipped unless opted in; Calculator self-ignores where the app is absent;
 # CI runs it in a dedicated job on windows-latest)
 $env:UIA_SMOKE = "1"; dotnet test UiAutomationGRPC.Server.Tests --filter "TestCategory=Smoke"
 ```
@@ -76,7 +77,7 @@ C# types are generated at build time by `Grpc.Tools` — there are no checked-in
 
 - `ElementHandler` — find / get children / get property. `GetProperty("Value"|"Text")` reads text content via `ValuePattern` **or** `TextPattern` (Notepad's Win32 Edit only has the latter, WinForms textboxes only the former) before falling back to a raw property read.
 - `ActionHandler` — `PerformAction` (UIA patterns like Invoke/Toggle/SetValue, plus simulated mouse/keyboard) and `SendKeys` (optional `runtime_id`: foregrounds the owning window via [`WindowFocus`](UiAutomationGRPC.Server/Helpers/WindowFocus.cs), focuses the element, then **verifies the window holds foreground before injecting** — refuses rather than leaking keystrokes into another app)
-- `AppLifecycleHandler` — `OpenApp` / `CloseApp` (by name) / `CloseAppByProcessId` (by PID). `OpenApp` resolves the real window-owner PID for UWP/launcher apps via [`UwpPidResolver`](UiAutomationGRPC.Server/Helpers/UwpPidResolver.cs) (EnumWindows snapshot diff when the launched process exits within 500 ms).
+- `AppLifecycleHandler` — `OpenApp` / `CloseApp` (by name) / `CloseAppByProcessId` (by PID). `OpenApp` resolves the real window-owner PID for UWP/launcher apps via [`UwpPidResolver`](UiAutomationGRPC.Server/Helpers/UwpPidResolver.cs) (EnumWindows snapshot diff **by window handle** — UWP frames belong to the long-lived ApplicationFrameHost, so a PID diff never sees them; decision is evidence-based: alive+own-window → classic app, alive+window-less past 1.5 s → background app, exited → debounced window diff. The calc.exe alias stub lives ~1 s before handing off, and the UWP CoreWindow flashes top-level before reparenting into the frame — both bit us in live runs).
 - `AppStructureHandler` — the LLM-friendly JSON tree (`GetAppStructure`, `PerformActionWithStructure`); builds `AppNode` trees recursively
 - `ScreenshotHandler`, `ReflectionHandler`
 
