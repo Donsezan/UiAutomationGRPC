@@ -1,17 +1,19 @@
 using System.Diagnostics;
+using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Threading;
-using System.Windows;
-using System.Windows.Automation;
+using FlaUI.Core;
+using FlaUI.Core.AutomationElements;
+using FlaUI.Core.Conditions;
+using FlaUI.Core.Definitions;
 using Grpc.Core;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using UiAutomation;
 using UiAutomationGRPC.Server.Helpers;
 using UiAutomationGRPC.Server.Models;
-using PropertyCondition = System.Windows.Automation.PropertyCondition;
-using UiaCondition = System.Windows.Automation.Condition;
-using UiaTreeScope = System.Windows.Automation.TreeScope;
+using PropertyCondition = FlaUI.Core.Conditions.PropertyCondition;
+using UiaTreeScope = FlaUI.Core.Definitions.TreeScope;
 
 namespace UiAutomationGRPC.Server.Handlers
 {
@@ -44,6 +46,32 @@ namespace UiAutomationGRPC.Server.Handlers
         {
             try
             {
+                var effective = _options.MergeWith(request.StructureOptions);
+
+                // Scoped build: the client asked for the subtree under a known element instead of
+                // the whole window — much cheaper for big/dynamic apps.
+                string scopeId = request.StructureOptions?.ScopeRuntimeId ?? "";
+                if (!string.IsNullOrEmpty(scopeId))
+                {
+                    if (!ElementCache.TryGetLive(scopeId, out var scopeElement))
+                        return new AppStructureResponse { Success = false, Message = $"Scope element '{scopeId}' not found in cache." };
+
+                    int scopePid = scopeElement.Properties.ProcessId.ValueOrDefault;
+                    var scopeBlocked = InteractionAccessGuard.CheckAccess(_guard, scopePid);
+                    if (scopeBlocked != null)
+                        return new AppStructureResponse { Success = false, Message = scopeBlocked };
+
+                    var (scopedNode, scopedCtx) = BuildTree(scopeElement, context.CancellationToken, effective);
+                    var scopedJson = SerializeWithDiff(scopedNode, scopePid,
+                        request.StructureOptions?.DiffMode == true, effective, out var scopedNote);
+                    return new AppStructureResponse
+                    {
+                        Success = true,
+                        JsonStructure = scopedJson,
+                        Message = DescribeResult(scopedCtx) + scopedNote
+                    };
+                }
+
                 Process[] processes = null;
 
                 if (request.UseProcessId && request.ProcessId > 0)
@@ -87,7 +115,7 @@ namespace UiAutomationGRPC.Server.Handlers
                         {
                             try
                             {
-                                var candidate = AutomationElement.FromHandle(p.MainWindowHandle);
+                                var candidate = UiaRuntime.Automation.FromHandle(p.MainWindowHandle);
                                 if (candidate != null && !IsUwpSpacer(candidate))
                                 {
                                     if (IsWindowControlType(candidate))
@@ -108,12 +136,12 @@ namespace UiAutomationGRPC.Server.Handlers
                         // Strategy 2: Search this PID's top-level elements, preferring a real Window.
                         if (rootMapElement == null)
                         {
-                            var condition = new PropertyCondition(AutomationElement.ProcessIdProperty, p.Id);
+                            var condition = new PropertyCondition(UiaRuntime.Properties.Element.ProcessId, p.Id);
                             try
                             {
-                                var candidates = AutomationElement.RootElement.FindAll(UiaTreeScope.Children, condition);
+                                var candidates = UiaRuntime.Desktop.FindAll(UiaTreeScope.Children, condition);
                                 AutomationElement firstAny = null;
-                                foreach (AutomationElement c in candidates)
+                                foreach (var c in candidates)
                                 {
                                     firstAny ??= c;
                                     if (IsWindowControlType(c))
@@ -147,8 +175,8 @@ namespace UiAutomationGRPC.Server.Handlers
 
                     try
                     {
-                        var nameCondition = new PropertyCondition(AutomationElement.NameProperty, nameToSearch);
-                        var candidate = AutomationElement.RootElement.FindFirst(UiaTreeScope.Children, nameCondition);
+                        var nameCondition = new PropertyCondition(UiaRuntime.Properties.Element.Name, nameToSearch);
+                        var candidate = UiaRuntime.Desktop.FindFirst(UiaTreeScope.Children, nameCondition);
                         if (candidate != null)
                         {
                             rootMapElement = candidate;
@@ -170,19 +198,21 @@ namespace UiAutomationGRPC.Server.Handlers
                 if (rootMapElement == null)
                     return new AppStructureResponse { Success = false, Message = "Main window element not found." };
 
+                int rootPid = rootMapElement.Properties.ProcessId.ValueOrDefault;
+
                 // Validate interaction access against the owning process
-                var blocked = InteractionAccessGuard.CheckAccess(_guard, rootMapElement.Current.ProcessId);
+                var blocked = InteractionAccessGuard.CheckAccess(_guard, rootPid);
                 if (blocked != null)
                     return new AppStructureResponse { Success = false, Message = blocked };
 
                 // Flush stale cache for this process before rebuilding fresh
-                try { ElementCache.ClearByProcess(rootMapElement.Current.ProcessId); }
-                catch (System.Windows.Automation.ElementNotAvailableException) { }
+                ElementCache.ClearByProcess(rootPid);
 
-                var (rootNode, ctx) = BuildTree(rootMapElement, context.CancellationToken);
-                var json = Serialize(rootNode);
+                var (rootNode, ctx) = BuildTree(rootMapElement, context.CancellationToken, effective);
+                var json = SerializeWithDiff(rootNode, rootPid,
+                    request.StructureOptions?.DiffMode == true, effective, out var note);
 
-                return new AppStructureResponse { Success = true, JsonStructure = json, Message = DescribeResult(ctx) };
+                return new AppStructureResponse { Success = true, JsonStructure = json, Message = DescribeResult(ctx) + note };
             }
             catch (OperationCanceledException)
             {
@@ -204,22 +234,34 @@ namespace UiAutomationGRPC.Server.Handlers
 
             try
             {
+                var effective = _options.MergeWith(request.StructureOptions);
+
                 if (ElementCache.TryGetLive(request.RuntimeId, out var element))
                 {
                     var window = ScreenshotHandler.GetTopLevelWindow(element);
                     if (window != null)
                     {
-                        // Let the UI settle after the action. We hold the worker for this window
+                        // Let the UI settle after the action (event-driven quiescence with a hard
+                        // cap for continuously-updating apps). We hold the worker for this window
                         // intentionally so no other operation interleaves before the refreshed read.
-                        Thread.Sleep(200);
+                        UiSettler.WaitForQuiet(window, effective.SettleQuietMs, effective.SettleMaxMs);
+
+                        // Scoped rebuild: return only the subtree the client cares about.
+                        // Resolve AFTER the action + settle so the scope element reflects the new state.
+                        AutomationElement rebuildRoot = window;
+                        string scopeId = request.StructureOptions?.ScopeRuntimeId ?? "";
+                        if (!string.IsNullOrEmpty(scopeId) && ElementCache.TryGetLive(scopeId, out var scopeElement))
+                            rebuildRoot = scopeElement;
+
+                        int windowPid = window.Properties.ProcessId.ValueOrDefault;
 
                         // Flush stale cache for this process before rebuilding fresh
-                        try { ElementCache.ClearByProcess(window.Current.ProcessId); }
-                        catch (System.Windows.Automation.ElementNotAvailableException) { }
+                        ElementCache.ClearByProcess(windowPid);
 
-                        var (rootNode, ctx) = BuildTree(window, context.CancellationToken);
-                        var json = Serialize(rootNode);
-                        return new AppStructureResponse { Success = true, JsonStructure = json, Message = $"Action performed. {DescribeResult(ctx)}" };
+                        var (rootNode, ctx) = BuildTree(rebuildRoot, context.CancellationToken, effective);
+                        var json = SerializeWithDiff(rootNode, windowPid,
+                            request.StructureOptions?.DiffMode == true, effective, out var note);
+                        return new AppStructureResponse { Success = true, JsonStructure = json, Message = $"Action performed. {DescribeResult(ctx)}{note}" };
                     }
                 }
             }
@@ -227,7 +269,7 @@ namespace UiAutomationGRPC.Server.Handlers
             {
                 throw new RpcException(new Status(StatusCode.Cancelled, "PerformActionWithStructure cancelled by client."));
             }
-            catch (Exception ex) when (ex is ElementNotAvailableException || ex is COMException)
+            catch (Exception ex) when (UiaRuntime.IsStaleElement(ex) || ex is COMException)
             {
                 // The action itself already succeeded (we only reach here after actionResult.Success).
                 // The target element/window then went away before we could read the refreshed tree —
@@ -240,109 +282,123 @@ namespace UiAutomationGRPC.Server.Handlers
         }
 
         /// <summary>
-        /// Builds the LLM-facing tree for <paramref name="liveRoot"/>. Uses a single
-        /// <see cref="CacheRequest"/> over the subtree so per-node property reads are served from
-        /// the cached snapshot instead of one cross-process COM round-trip each. Falls back to live
-        /// reads transparently if the cache cannot be activated.
+        /// Builds the LLM-facing tree for <paramref name="liveRoot"/>. A <see cref="CacheRequest"/>
+        /// is held active over the whole build so the subtree fetch and all per-node property reads
+        /// come from one batched snapshot instead of one cross-process COM round-trip each
+        /// (FlaUI routes reads to the cache while an activation is in scope). Falls back to live
+        /// reads transparently if the cached build fails.
         /// </summary>
-        private (AppNode node, BuildContext ctx) BuildTree(AutomationElement liveRoot, CancellationToken ct)
+        private (AppNode node, BuildContext ctx) BuildTree(AutomationElement liveRoot, CancellationToken ct, AppStructureOptions? options = null)
         {
-            var ctx = new BuildContext { Ct = ct };
-            AutomationElement root = liveRoot;
-
             try
             {
+                var ctx = new BuildContext { Ct = ct, Options = options ?? _options, Cached = true };
                 using (BuildCacheRequest().Activate())
                 {
                     // Re-fetch the root inside the active request so it — and, with TreeScope.Subtree,
                     // its whole subtree — carries cached property values reachable via CachedChildren.
-                    var cached = liveRoot.FindFirst(UiaTreeScope.Element, UiaCondition.TrueCondition);
-                    if (cached != null) root = cached;
+                    var cachedRoot = liveRoot.FindFirst(UiaTreeScope.Element, TrueCondition.Default);
+                    if (cachedRoot != null)
+                    {
+                        var node = BuildNode(cachedRoot, ctx, depth: 0);
+                        return (node, ctx);
+                    }
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "CacheRequest activation failed; falling back to live property reads.");
+                _logger.LogDebug(ex, "Cached tree build failed; falling back to live property reads.");
             }
 
-            var node = BuildNode(root, ctx, depth: 0);
-            return (node, ctx);
+            var liveCtx = new BuildContext { Ct = ct, Options = options ?? _options, Cached = false };
+            var liveNode = BuildNode(liveRoot, liveCtx, depth: 0);
+            return (liveNode, liveCtx);
         }
 
         /// <summary>Prefetches every property the tree builder reads, across the whole subtree.</summary>
         private static CacheRequest BuildCacheRequest()
         {
+            var lib = UiaRuntime.Properties;
             var cr = new CacheRequest
             {
                 TreeScope = UiaTreeScope.Subtree,
-                TreeFilter = Automation.ControlViewCondition,
+                // Control view only — same filter the live TreeWalker path uses.
+                TreeFilter = new PropertyCondition(lib.Element.IsControlElement, true),
                 AutomationElementMode = AutomationElementMode.Full // keep live refs usable for later interaction/re-find
             };
-            cr.Add(AutomationElement.RuntimeIdProperty);
-            cr.Add(AutomationElement.AutomationIdProperty);
-            cr.Add(AutomationElement.NameProperty);
-            cr.Add(AutomationElement.ClassNameProperty);
-            cr.Add(AutomationElement.ControlTypeProperty);
-            cr.Add(AutomationElement.ProcessIdProperty);
-            cr.Add(AutomationElement.IsOffscreenProperty);
-            cr.Add(AutomationElement.BoundingRectangleProperty);
-            cr.Add(AutomationElement.IsInvokePatternAvailableProperty);
-            cr.Add(AutomationElement.IsTogglePatternAvailableProperty);
-            cr.Add(AutomationElement.IsExpandCollapsePatternAvailableProperty);
-            cr.Add(AutomationElement.IsSelectionItemPatternAvailableProperty);
-            cr.Add(AutomationElement.IsValuePatternAvailableProperty);
-            cr.Add(ValuePattern.IsReadOnlyProperty);
+            cr.Add(lib.Element.RuntimeId);
+            cr.Add(lib.Element.AutomationId);
+            cr.Add(lib.Element.Name);
+            cr.Add(lib.Element.ClassName);
+            cr.Add(lib.Element.ControlType);
+            cr.Add(lib.Element.ProcessId);
+            cr.Add(lib.Element.IsOffscreen);
+            cr.Add(lib.Element.BoundingRectangle);
+            cr.Add(lib.PatternAvailability.IsInvokePatternAvailable);
+            cr.Add(lib.PatternAvailability.IsTogglePatternAvailable);
+            cr.Add(lib.PatternAvailability.IsExpandCollapsePatternAvailable);
+            cr.Add(lib.PatternAvailability.IsSelectionItemPatternAvailable);
+            cr.Add(lib.PatternAvailability.IsValuePatternAvailable);
+            cr.Add(lib.Value.IsReadOnly);
             return cr;
         }
 
         private AppNode BuildNode(AutomationElement element, BuildContext ctx, int depth)
         {
             ctx.Ct.ThrowIfCancellationRequested();
+            var options = ctx.Options;
 
-            if (_options.MaxNodes > 0 && ctx.Emitted >= _options.MaxNodes)
+            if (options.MaxNodes > 0 && ctx.Emitted >= options.MaxNodes)
             {
                 ctx.Truncated = true;
                 return null;
             }
 
             bool isRoot = depth == 0;
+            var lib = UiaRuntime.Properties;
 
-            bool isOffscreen = AsBool(Prop(element, AutomationElement.IsOffscreenProperty));
+            bool isOffscreen = Prop(element, lib.Element.IsOffscreen, false);
 
-            Rect rect;
-            try { rect = AsRect(Prop(element, AutomationElement.BoundingRectangleProperty)); }
-            catch { rect = Rect.Empty; }
+            Rectangle rect = Prop(element, lib.Element.BoundingRectangle, Rectangle.Empty);
             bool hasRect = !rect.IsEmpty;
             bool zeroSize = hasRect && rect.Width <= 0 && rect.Height <= 0;
 
             // Filter offscreen / zero-size nodes (and their subtrees) unless opted in.
             // The root window is never filtered, so a minimized app still returns a tree.
-            if (!isRoot && !_options.IncludeOffscreen && (isOffscreen || zeroSize))
+            if (!isRoot && !options.IncludeOffscreen && (isOffscreen || zeroSize))
                 return null;
 
-            string automationId = AsString(Prop(element, AutomationElement.AutomationIdProperty));
-            string name = AsString(Prop(element, AutomationElement.NameProperty));
-            string className = AsString(Prop(element, AutomationElement.ClassNameProperty));
-            var controlType = Prop(element, AutomationElement.ControlTypeProperty) as ControlType;
-            string controlTypeName = controlType?.ProgrammaticName ?? "";
-            int processId = AsInt(Prop(element, AutomationElement.ProcessIdProperty));
+            string automationId = Prop(element, lib.Element.AutomationId, "") ?? "";
+            string name = Prop(element, lib.Element.Name, "") ?? "";
+            string className = Prop(element, lib.Element.ClassName, "") ?? "";
+            var controlType = Prop(element, lib.Element.ControlType, ControlType.Unknown);
+            string controlTypeName = AutomationMapper.ControlTypeName(controlType);
+            int processId = Prop(element, lib.Element.ProcessId, 0);
 
             // An element is "clickable" if it exposes any pattern an agent can act on:
             // Invoke (buttons), Toggle (checkboxes), ExpandCollapse (tree/combo nodes),
             // SelectionItem (list/tab/radio items), a settable Value (editable fields), or it is a
             // Hyperlink control. The earlier invoke||toggle-only check missed most of these.
-            bool invoke = AsBool(Prop(element, AutomationElement.IsInvokePatternAvailableProperty));
-            bool toggle = AsBool(Prop(element, AutomationElement.IsTogglePatternAvailableProperty));
-            bool expandCollapse = AsBool(Prop(element, AutomationElement.IsExpandCollapsePatternAvailableProperty));
-            bool selectionItem = AsBool(Prop(element, AutomationElement.IsSelectionItemPatternAvailableProperty));
-            bool valueSettable = AsBool(Prop(element, AutomationElement.IsValuePatternAvailableProperty))
-                                 && !AsBool(Prop(element, ValuePattern.IsReadOnlyProperty));
+            bool invoke = Prop(element, lib.PatternAvailability.IsInvokePatternAvailable, false);
+            bool toggle = Prop(element, lib.PatternAvailability.IsTogglePatternAvailable, false);
+            bool expandCollapse = Prop(element, lib.PatternAvailability.IsExpandCollapsePatternAvailable, false);
+            bool selectionItem = Prop(element, lib.PatternAvailability.IsSelectionItemPatternAvailable, false);
+            bool valueSettable = Prop(element, lib.PatternAvailability.IsValuePatternAvailable, false)
+                                 && !Prop(element, lib.Value.IsReadOnly, true);
             bool isHyperlink = controlType == ControlType.Hyperlink;
             bool clickable = invoke || toggle || expandCollapse || selectionItem || valueSettable || isHyperlink;
 
-            string runtimeId = (Prop(element, AutomationElement.RuntimeIdProperty) is int[] rid)
-                ? string.Join(",", rid)
-                : string.Join(",", element.GetRuntimeId());
+            var runtimeIdParts = Prop<int[]>(element, lib.Element.RuntimeId, null);
+            string runtimeId = runtimeIdParts != null ? string.Join(",", runtimeIdParts) : "";
+            if (string.IsNullOrEmpty(runtimeId))
+            {
+                try { runtimeId = UiaRuntime.RuntimeIdOf(element); }
+                catch { /* element without a runtime id — leave empty, not addressable */ }
+            }
 
             ElementCache.CacheElement(element, runtimeId, automationId, name, className, controlTypeName, processId);
             ctx.Emitted++;
@@ -355,13 +411,13 @@ namespace UiAutomationGRPC.Server.Handlers
                 ControlType = controlTypeName,
                 IsClickable = clickable,
                 IsVisible = !isOffscreen,
-                BoundingRectangle = hasRect ? $"{(int)rect.Left},{(int)rect.Top},{(int)rect.Width},{(int)rect.Height}" : null
+                BoundingRectangle = hasRect ? $"{rect.Left},{rect.Top},{rect.Width},{rect.Height}" : null
             };
 
-            var children = GetChildElements(element);
+            var children = GetChildElements(element, ctx.Cached);
 
             // Depth cap: stop descending but record that this subtree is incomplete.
-            if (_options.MaxDepth > 0 && depth >= _options.MaxDepth)
+            if (options.MaxDepth > 0 && depth >= options.MaxDepth)
             {
                 if (children.Count > 0)
                 {
@@ -377,7 +433,7 @@ namespace UiAutomationGRPC.Server.Handlers
                 if (childNode != null)
                     node.Children.Add(childNode);
 
-                if (_options.MaxNodes > 0 && ctx.Emitted >= _options.MaxNodes)
+                if (options.MaxNodes > 0 && ctx.Emitted >= options.MaxNodes)
                 {
                     node.ChildrenTruncated = true;
                     ctx.Truncated = true;
@@ -389,52 +445,84 @@ namespace UiAutomationGRPC.Server.Handlers
         }
 
         /// <summary>
-        /// Child elements via the cached snapshot (no COM round-trips) when available,
-        /// falling back to a live ControlView TreeWalker if this element was not cached.
+        /// Child elements via the cached snapshot (no COM round-trips) when this build runs under
+        /// an active <see cref="CacheRequest"/>, falling back to a live ControlView TreeWalker.
         /// </summary>
-        private static List<AutomationElement> GetChildElements(AutomationElement element)
+        private static List<AutomationElement> GetChildElements(AutomationElement element, bool cached)
         {
-            try
+            if (cached)
             {
-                var cached = element.CachedChildren;
-                var list = new List<AutomationElement>(cached.Count);
-                foreach (AutomationElement c in cached)
-                    list.Add(c);
-                return list;
+                try
+                {
+                    return new List<AutomationElement>(element.CachedChildren);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Trace.WriteLine($"[AppStructureHandler] CachedChildren unavailable, reading live: {ex.Message}");
+                }
             }
-            catch (InvalidOperationException)
-            {
-                // Element has no cached children (cache not active / not requested) — read live.
-                return ElementHandler.GetChildElements(element);
-            }
+            return ElementHandler.GetChildElements(element);
         }
 
-        private string Serialize(AppNode root) =>
-            JsonConvert.SerializeObject(root, _options.CompactJson ? Formatting.None : Formatting.Indented, _jsonSettings);
+        private string Serialize(AppNode root, AppStructureOptions? options = null) =>
+            JsonConvert.SerializeObject(root, (options ?? _options).CompactJson ? Formatting.None : Formatting.Indented, _jsonSettings);
+
+        /// <summary>
+        /// Serializes the build result, honouring diff_mode: when a previous snapshot of the same
+        /// root exists, only added/changed/removed nodes are returned. The fresh tree is always
+        /// stored as the next diff base — including on non-diff calls, so a plain "See" followed
+        /// by diff-mode actions works naturally.
+        /// </summary>
+        private string SerializeWithDiff(AppNode rootNode, int pid, bool diffMode, AppStructureOptions effective, out string note)
+        {
+            note = "";
+            var previous = diffMode ? StructureSnapshotStore.Get(rootNode.UniqId) : null;
+            StructureSnapshotStore.Set(rootNode.UniqId, pid, rootNode);
+
+            if (!diffMode)
+                return Serialize(rootNode, effective);
+
+            if (previous == null)
+            {
+                note = " Diff requested but no previous snapshot existed; returned the full tree.";
+                return Serialize(rootNode, effective);
+            }
+
+            var diff = StructureDiff.Compute(previous, rootNode);
+            if (diff.IsEmpty)
+                note = " No UI changes since the previous snapshot.";
+            return JsonConvert.SerializeObject(diff, effective.CompactJson ? Formatting.None : Formatting.Indented, _jsonSettings);
+        }
 
         private static string DescribeResult(BuildContext ctx) =>
             ctx.Truncated
                 ? $"Structure retrieved ({ctx.Emitted} nodes, truncated — raise Features:AppStructure MaxDepth/MaxNodes to see more)."
                 : $"Structure retrieved ({ctx.Emitted} nodes).";
 
-        // --- cached-value readers: prefer the CacheRequest snapshot, fall back to a live read ---
+        // --- property reader: cached when the build runs under an active CacheRequest, with a
+        // --- per-property fallback default so one unsupported property never fails the node ---
 
-        private static object Prop(AutomationElement element, AutomationProperty property)
+        private static T Prop<T>(AutomationElement element, FlaUI.Core.Identifiers.PropertyId property, T fallback)
         {
-            try { return element.GetCachedPropertyValue(property); }
-            catch (InvalidOperationException) { return element.GetCurrentPropertyValue(property); }
+            try
+            {
+                return element.FrameworkAutomationElement.TryGetPropertyValue<T>(property, out var value)
+                    ? value
+                    : fallback;
+            }
+            catch
+            {
+                return fallback;
+            }
         }
-
-        private static bool AsBool(object o) => o is bool b && b;
-        private static string AsString(object o) => o as string ?? "";
-        private static int AsInt(object o) => o is int i ? i : 0;
-        private static Rect AsRect(object o) => o is Rect r ? r : Rect.Empty;
 
         private sealed class BuildContext
         {
             public CancellationToken Ct;
+            public AppStructureOptions Options = new();
             public int Emitted;
             public bool Truncated;
+            public bool Cached;
         }
 
         /// <summary>
@@ -445,7 +533,7 @@ namespace UiAutomationGRPC.Server.Handlers
         {
             try
             {
-                return Equals(element.Current.ControlType, ControlType.Window);
+                return element.Properties.ControlType.ValueOrDefault == ControlType.Window;
             }
             catch (Exception ex)
             {
@@ -469,7 +557,7 @@ namespace UiAutomationGRPC.Server.Handlers
 
         private static bool HasChildren(AutomationElement element)
         {
-            var walker = TreeWalker.ControlViewWalker;
+            var walker = UiaRuntime.Automation.TreeWalkerFactory.GetControlViewWalker();
             return walker.GetFirstChild(element) != null;
         }
     }

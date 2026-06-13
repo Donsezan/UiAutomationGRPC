@@ -31,5 +31,38 @@ namespace UiAutomationGRPC.Server.Models
         /// the LLM path. Set false for human-readable indented output.
         /// </summary>
         public bool CompactJson { get; set; } = true;
+
+        /// <summary>
+        /// After PerformActionWithStructure, the refreshed tree is read once no UI-change event
+        /// has arrived for this many ms (quiescence). 0 disables settling entirely.
+        /// </summary>
+        public int SettleQuietMs { get; set; } = 150;
+
+        /// <summary>
+        /// Hard cap on the settle wait. Continuously-updating apps (tickers, live grids) may
+        /// never go quiet — after this many ms the tree is read regardless.
+        /// </summary>
+        public int SettleMaxMs { get; set; } = 1000;
+
+        /// <summary>
+        /// Returns the effective options for one request: configured defaults overridden by any
+        /// per-request <see cref="UiAutomation.StructureOptions"/> the client supplied. The agent
+        /// knows when it only needs a shallow or scoped view — letting it shrink the tree per call
+        /// saves tokens/latency without touching server config.
+        /// </summary>
+        public AppStructureOptions MergeWith(UiAutomation.StructureOptions? overrides)
+        {
+            if (overrides == null) return this;
+
+            return new AppStructureOptions
+            {
+                MaxDepth = overrides.MaxDepth > 0 ? overrides.MaxDepth : MaxDepth,
+                MaxNodes = overrides.MaxNodes > 0 ? overrides.MaxNodes : MaxNodes,
+                IncludeOffscreen = overrides.HasIncludeOffscreen ? overrides.IncludeOffscreen : IncludeOffscreen,
+                CompactJson = CompactJson,
+                SettleQuietMs = SettleQuietMs,
+                SettleMaxMs = SettleMaxMs
+            };
+        }
     }
 }

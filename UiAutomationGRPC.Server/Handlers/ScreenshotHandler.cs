@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Windows.Automation;
+using FlaUI.Core.AutomationElements;
 using UiAutomation;
 using UiAutomationGRPC.Server.Helpers;
 
@@ -25,7 +25,7 @@ namespace UiAutomationGRPC.Server.Handlers
             Bitmap bmp = null;
             try
             {
-                System.Drawing.Rectangle captureRect = System.Drawing.Rectangle.Empty;
+                Rectangle captureRect = Rectangle.Empty;
                 AutomationElement targetElement = null;
 
                 if (request.Mode == ScreenshotMode.Element)
@@ -45,15 +45,15 @@ namespace UiAutomationGRPC.Server.Handlers
                     }
                     else
                     {
-                        var rect = targetElement.Current.BoundingRectangle;
+                        var rect = targetElement.BoundingRectangle;
                         if (rect.Width <= 0 || rect.Height <= 0) throw new Exception("Element has invalid dimensions.");
 
                         // Validate interaction access before capturing
-                        var blocked = InteractionAccessGuard.CheckAccess(_guard, targetElement.Current.ProcessId);
+                        var blocked = InteractionAccessGuard.CheckAccess(_guard, targetElement.Properties.ProcessId.ValueOrDefault);
                         if (blocked != null)
                             return new ScreenshotResponse { Success = false, Message = blocked };
 
-                        captureRect = new System.Drawing.Rectangle((int)rect.X, (int)rect.Y, (int)rect.Width, (int)rect.Height);
+                        captureRect = rect;
                         bmp = CaptureRegion(captureRect);
                     }
                 }
@@ -62,24 +62,24 @@ namespace UiAutomationGRPC.Server.Handlers
                     if (!string.IsNullOrEmpty(request.RuntimeId) && ElementCache.TryGetLive(request.RuntimeId, out targetElement))
                     {
                         // Validate interaction access before capturing
-                        var blockedW = InteractionAccessGuard.CheckAccess(_guard, targetElement.Current.ProcessId);
+                        var blockedW = InteractionAccessGuard.CheckAccess(_guard, targetElement.Properties.ProcessId.ValueOrDefault);
                         if (blockedW != null)
                             return new ScreenshotResponse { Success = false, Message = blockedW };
 
                         // Traverse up to find the window
                         var windowElement = GetTopLevelWindow(targetElement);
-                        var wRect = windowElement.Current.BoundingRectangle;
-                        captureRect = new System.Drawing.Rectangle((int)wRect.X, (int)wRect.Y, (int)wRect.Width, (int)wRect.Height);
+                        var wRect = windowElement.BoundingRectangle;
+                        captureRect = wRect;
                         bmp = CaptureRegion(captureRect);
 
                         // Draw highlight
-                        if (targetElement != windowElement) 
+                        if (!targetElement.Equals(windowElement))
                         {
-                            var elemRect = targetElement.Current.BoundingRectangle;
+                            var elemRect = targetElement.BoundingRectangle;
                             using (var g = Graphics.FromImage(bmp))
                             using (var pen = new Pen(Color.Red, 3))
                             {
-                                g.DrawRectangle(pen, (int)(elemRect.X - wRect.X), (int)(elemRect.Y - wRect.Y), (int)elemRect.Width, (int)elemRect.Height);
+                                g.DrawRectangle(pen, elemRect.X - wRect.X, elemRect.Y - wRect.Y, elemRect.Width, elemRect.Height);
                             }
                         }
                     }
@@ -88,9 +88,8 @@ namespace UiAutomationGRPC.Server.Handlers
                         var process = Process.GetProcessById(request.ProcessId);
                         if (process.MainWindowHandle != IntPtr.Zero)
                         {
-                            var windowElement = AutomationElement.FromHandle(process.MainWindowHandle);
-                            var wRect = windowElement.Current.BoundingRectangle;
-                            captureRect = new System.Drawing.Rectangle((int)wRect.X, (int)wRect.Y, (int)wRect.Width, (int)wRect.Height);
+                            var windowElement = UiaRuntime.Automation.FromHandle(process.MainWindowHandle);
+                            captureRect = windowElement.BoundingRectangle;
                             bmp = CaptureRegion(captureRect);
                         }
                         else
@@ -104,7 +103,7 @@ namespace UiAutomationGRPC.Server.Handlers
                         bmp = CaptureRegion(captureRect);
                     }
                 }
-                
+
                 if (bmp == null)
                 {
                     return new ScreenshotResponse { Success = false, Message = "Failed to capture screenshot." };
@@ -131,7 +130,7 @@ namespace UiAutomationGRPC.Server.Handlers
             }
         }
 
-        public static Bitmap CaptureRegion(System.Drawing.Rectangle rect)
+        public static Bitmap CaptureRegion(Rectangle rect)
         {
             var bmp = new Bitmap(rect.Width, rect.Height);
             using (var g = Graphics.FromImage(bmp))
@@ -143,13 +142,15 @@ namespace UiAutomationGRPC.Server.Handlers
 
         public static AutomationElement GetTopLevelWindow(AutomationElement element)
         {
-            var walker = TreeWalker.ControlViewWalker;
+            var desktop = UiaRuntime.Desktop;
+            var walker = UiaRuntime.Automation.TreeWalkerFactory.GetControlViewWalker();
             var current = element;
             while (current != null)
             {
-                if (current == AutomationElement.RootElement) return element;
+                if (current.Equals(desktop)) return element;
                 var parent = walker.GetParent(current);
-                if (parent == AutomationElement.RootElement) return current;
+                if (parent == null) return current;
+                if (parent.Equals(desktop)) return current;
                 current = parent;
             }
             return element;

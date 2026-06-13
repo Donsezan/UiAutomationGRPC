@@ -45,6 +45,66 @@ namespace UiAutomationGRPC.Server.Tests
             Assert.That(new AppStructureOptions().CompactJson, Is.True);
         }
 
+        // ────────────────────────────── Per-request override merge ──────────────────────────────
+
+        [Test]
+        public void MergeWith_Null_ReturnsSameInstance()
+        {
+            var defaults = new AppStructureOptions();
+            Assert.That(defaults.MergeWith(null), Is.SameAs(defaults));
+        }
+
+        [Test]
+        public void MergeWith_UnsetFields_KeepDefaults()
+        {
+            var defaults = new AppStructureOptions { MaxDepth = 12, MaxNodes = 345, IncludeOffscreen = true, CompactJson = false };
+            var merged = defaults.MergeWith(new UiAutomation.StructureOptions());
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(merged.MaxDepth, Is.EqualTo(12));
+                Assert.That(merged.MaxNodes, Is.EqualTo(345));
+                Assert.That(merged.IncludeOffscreen, Is.True);
+                Assert.That(merged.CompactJson, Is.False);
+            });
+        }
+
+        [Test]
+        public void MergeWith_PositiveCaps_Override()
+        {
+            var merged = new AppStructureOptions().MergeWith(new UiAutomation.StructureOptions { MaxDepth = 3, MaxNodes = 50 });
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(merged.MaxDepth, Is.EqualTo(3));
+                Assert.That(merged.MaxNodes, Is.EqualTo(50));
+            });
+        }
+
+        [Test]
+        public void MergeWith_IncludeOffscreen_OverridesOnlyWhenSet()
+        {
+            var defaults = new AppStructureOptions { IncludeOffscreen = false };
+
+            var explicitTrue = defaults.MergeWith(new UiAutomation.StructureOptions { IncludeOffscreen = true });
+            var unset = defaults.MergeWith(new UiAutomation.StructureOptions { MaxDepth = 1 });
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(explicitTrue.IncludeOffscreen, Is.True);
+                Assert.That(unset.IncludeOffscreen, Is.False);
+            });
+        }
+
+        [Test]
+        public void MergeWith_DoesNotMutateDefaults()
+        {
+            var defaults = new AppStructureOptions { MaxDepth = 40 };
+            _ = defaults.MergeWith(new UiAutomation.StructureOptions { MaxDepth = 2 });
+
+            Assert.That(defaults.MaxDepth, Is.EqualTo(40));
+        }
+
         // ────────────────────────────── JSON compact vs indented ──────────────────────────────
         // Validates the CompactJson flag effect — handler uses Formatting.None vs Formatting.Indented.
 

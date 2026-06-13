@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A gRPC service that exposes Windows UI Automation (the `System.Windows.Automation` / UIA framework) over the network so any gRPC client — scripts, .NET SDK consumers, or LLM agents via MCP — can drive desktop apps remotely. The core loop for agents is **See → Think → Act**: `GetAppStructure` returns the UI tree as JSON, the agent picks an element by `RuntimeId`, and `PerformActionWithStructure` acts and returns the refreshed tree in one call.
+A gRPC service that exposes Windows UI Automation (**UIA3 via [FlaUI](https://github.com/FlaUI/FlaUI) 5.0** — migrated from the deprecated managed UIA2 / `System.Windows.Automation`; see "UIA engine" below) over the network so any gRPC client — scripts, .NET SDK consumers, or LLM agents via MCP — can drive desktop apps remotely. The core loop for agents is **See → Think → Act**: `GetAppStructure` returns the UI tree as JSON, the agent picks an element by `RuntimeId`, and `PerformActionWithStructure` acts and returns the refreshed tree in one call.
 
 ## Projects (all target `net8.0-windows`)
 
@@ -12,13 +12,14 @@ A gRPC service that exposes Windows UI Automation (the `System.Windows.Automatio
 
 | Project | Role |
 |---------|------|
-| `UiAutomationGRPC.Server` | The gRPC service (`Microsoft.NET.Sdk.Web`, Kestrel + HTTP/2). Runs the actual UIA calls. Can run as a console app or Windows Service. |
+| `UiAutomationGRPC.Server` | The gRPC service (`Microsoft.NET.Sdk.Web`, Kestrel + HTTP/2). Runs the actual UIA calls. Run it as a console app in the user's interactive session (see "Session 0" below). |
 | `UiAutomationGRPC.Library` | NuGet-packaged .NET client SDK (`UiAutomationDriver`, `VirtualMouse`, `VirtualKeyboard`, fluent `Selector` API). PackageId `UiAutomationGRPC`. |
 | `UiAutomationGRPC.AI/MCP` | MCP server (`UiAutomationGRPC.LLM.csproj`) bridging LLM clients to the gRPC server. Configured via `UIAUTOMATION_*` env vars. |
+| `UiAutomationGRPC.AI/Skill` | `UiAutomationSkill/SKILL.md` — the agent-facing guide for the MCP tools, plus per-app "mental maps" in `apps/` (stable AutomationIds for Calculator, Notepad; `_template.md` for new apps). Markdown only, no code; exposed in Claude Code as the `ui-automation` skill via `.claude/commands/ui-automation.md`. |
 | `UiAutomationGRPC.Client` | Sample console app — Calculator automation reference using the Page Object pattern. |
-| `UiAutomationGRPC.Server.Tests` | NUnit tests for the Server's access-control validators. |
+| `UiAutomationGRPC.Server.Tests` | NUnit tests: access-control validators, `ElementCache`, `AutomationMapper`, `AppStructureOptions`, `ClearCache` routing, `TokenAuthInterceptor`. |
 
-There is no top-level solution that contains everything; each project has its own `.sln`. Build the one you need.
+There is no top-level solution that contains everything; `Server`, `Server.Tests`, and `Client` each have their own `.sln`, while `Library` and the MCP project have none — build those via their `.csproj` directly.
 
 ## Commands
 
@@ -38,9 +39,14 @@ dotnet test UiAutomationGRPC.Server.Tests
 # Run a single test or fixture
 dotnet test UiAutomationGRPC.Server.Tests --filter "FullyQualifiedName~KeyAccessValidatorTests"
 dotnet test UiAutomationGRPC.Server.Tests --filter "Name=SpecificTestMethod"
+
+# Live UI smoke tests (launch a real Notepad — typed input — and the UWP Calculator —
+# InvokePattern clicks; skipped unless opted in; Calculator self-ignores where the app is absent;
+# CI runs it in a dedicated job on windows-latest)
+$env:UIA_SMOKE = "1"; dotnet test UiAutomationGRPC.Server.Tests --filter "TestCategory=Smoke"
 ```
 
-Run the server **as Administrator** — UIA access to many target apps requires elevation. Most interactive behavior cannot be validated by unit tests alone; the tests only cover the access-control validators.
+Run the server **as Administrator** — UIA access to many target apps requires elevation. Most interactive behavior cannot be validated by unit tests alone; the tests cover validators, cache, mapper, and config plumbing, not live UIA interaction.
 
 ## MCP server setup for Claude Code
 
@@ -69,21 +75,42 @@ C# types are generated at build time by `Grpc.Tools` — there are no checked-in
 
 `UiAutomationService` ([UiAutomationService.cs](UiAutomationGRPC.Server/UiAutomationService.cs)) is a **thin orchestrator**: nearly every RPC delegates to a handler in `Handlers/`. Put new logic in the handlers, not the service. (The one exception today is `ClearCache`, whose logic lives inline in the service because it only dispatches to static `ElementCache` methods — keep it that way or move it to a handler if it grows.)
 
-- `ElementHandler` — find / get children / get property
-- `ActionHandler` — `PerformAction` (UIA patterns like Invoke/Toggle/SetValue, plus simulated mouse/keyboard) and `SendKeys`
-- `AppLifecycleHandler` — `OpenApp` / `CloseApp` (by name) / `CloseAppByProcessId` (by PID)
+- `ElementHandler` — find / get children / get property. `GetProperty("Value"|"Text")` reads text content via `ValuePattern` **or** `TextPattern` (Notepad's Win32 Edit only has the latter, WinForms textboxes only the former) before falling back to a raw property read.
+- `ActionHandler` — `PerformAction` (UIA patterns like Invoke/Toggle/SetValue, plus simulated mouse/keyboard) and `SendKeys` (optional `runtime_id`: foregrounds the owning window via [`WindowFocus`](UiAutomationGRPC.Server/Helpers/WindowFocus.cs), focuses the element, then **verifies the window holds foreground before injecting** — refuses rather than leaking keystrokes into another app)
+- `AppLifecycleHandler` — `OpenApp` / `CloseApp` (by name) / `CloseAppByProcessId` (by PID). `OpenApp` resolves the real window-owner PID for UWP/launcher apps via [`UwpPidResolver`](UiAutomationGRPC.Server/Helpers/UwpPidResolver.cs) (EnumWindows snapshot diff **by window handle** — UWP frames belong to the long-lived ApplicationFrameHost, so a PID diff never sees them; decision is evidence-based: alive+own-window → classic app, alive+window-less past 1.5 s → background app, exited → debounced window diff. The calc.exe alias stub lives ~1 s before handing off, and the UWP CoreWindow flashes top-level before reparenting into the frame — both bit us in live runs).
 - `AppStructureHandler` — the LLM-friendly JSON tree (`GetAppStructure`, `PerformActionWithStructure`); builds `AppNode` trees recursively
 - `ScreenshotHandler`, `ReflectionHandler`
 
+Service-level RPCs without a handler: `WaitForElement` (server-side poll loop that lives OFF the UIA worker — each probe is its own work item, `WaitPolicy` clamps timing) and `GetServerStatus` (queue load, cache size, session interactivity; answered off-worker so it works when the queue is saturated). Keyboard input is synthesized via `SendInput` ([`SendKeysParser`](UiAutomationGRPC.Server/Helpers/SendKeysParser.cs) parses the classic SendKeys grammar; named keys go as VK+scancode, plain text as `KEYEVENTF_UNICODE`) — no WinForms `SendKeys` dependency.
+
 The `ClearCache` RPC (handled inline in the service) flushes the element cache by PID, by app name (`ClearByName`, resolves name→PIDs like `CloseApp`), or entirely.
+
+### UIA engine: UIA3 via FlaUI
+
+The server drives UI Automation through **FlaUI.UIA3 5.0** (the native UIA3 COM API), not the deprecated managed UIA2 assemblies. [`UiaRuntime`](UiAutomationGRPC.Server/Helpers/UiaRuntime.cs) owns the process-wide `UIA3Automation` instance, the desktop root (`UiaRuntime.Desktop`), and `IsStaleElement` (FlaUI's `ElementNotAvailableException` or raw COM `0x80040201`). Conventions to preserve wire/client compatibility:
+- `ElementResponse.ControlType` and the JSON tree still emit UIA2-style programmatic names (`"ControlType.Button"`) via `AutomationMapper.ControlTypeName`.
+- Control-type **conditions** accept enum names (`"Window"`), programmatic names (`"ControlType.Window"`), or native UIA ids (`50032`) — normalized by `AutomationMapper.MapControlTypeValue`.
+- RuntimeId strings keep the comma-joined int format.
+- `WindowFocus.EnsureForeground` is load-bearing under UIA3: UIA2's managed `SetFocus` raised the window via the client-side Win32 proxy as a side effect, UIA3's does not. Activation attaches to both input queues (foreground owner + target), uses `BringWindowToTop`, then falls back to the ALT-key foreground-lock release — weaken it and targeted `SendKeys` starts refusing.
+
+### All UIA work runs on one serialized worker thread
+
+[`UiaExecutor`](UiAutomationGRPC.Server/Helpers/UiaExecutor.cs) marshals every UIA / global-input RPC onto a **single long-lived MTA worker thread** ("UIA-Worker"): concurrent gRPC calls would otherwise fight over the one mouse cursor / keyboard focus and race the cached COM references, so one worker makes each operation atomic. The queue is bounded (`Features:MaxQueuedRequests`, default 32); overflow is rejected with `ResourceExhausted` rather than queueing unbounded latency. Re-entrant calls from the worker thread run inline (no self-deadlock). **Exceptions that bypass the worker**: `OpenApp` / `CloseApp` / `CloseAppByProcessId` and `ClearCache` run directly on the request thread — they touch no UIA or input, and `CloseApp`'s `WaitForExit` would starve the worker. New RPCs that touch UIA, the cache, or synthesized input must go through `_executor.RunAsync(...)`; MTA (not STA) is deliberate — UIA *client* code is documented for MTA, STA invites cross-apartment deadlocks.
+
+### App-structure tree tuning (`Features:AppStructure`)
+
+`GetAppStructure` / `PerformActionWithStructure` output is bounded by [`AppStructureOptions`](UiAutomationGRPC.Server/Models/AppStructureOptions.cs): `MaxDepth` (default 40), `MaxNodes` (default 2000, truncated parents are flagged `ChildrenTruncated`), `IncludeOffscreen` (default false — offscreen / zero-size subtrees are skipped, the root window never is), `CompactJson` (default true — unindented JSON to save tokens). The handler holds a FlaUI `CacheRequest` active over the whole tree build (FlaUI routes property reads through the cache while an activation is in scope) so per-node reads come from one batched snapshot, falling back to a live-read build if the cached build fails.
+
+Clients can override per request via the proto `StructureOptions` message (`max_depth`, `max_nodes`, `include_offscreen`, `scope_runtime_id` to build under a known element, `diff_mode`); `AppStructureOptions.MergeWith` merges them over the configured defaults. **diff_mode** returns only added/changed/removed nodes vs the previous build of the same root ([`StructureDiff` + `StructureSnapshotStore`](UiAutomationGRPC.Server/Helpers/StructureDiff.cs), evicted via `ClearCache` and the dead-process sweep) — essential for huge dynamic UIs. After an action, the rebuild waits for **quiescence** instead of a fixed sleep ([`UiSettler`](UiAutomationGRPC.Server/Helpers/UiSettler.cs)): structure/property events under the window, quiet period `SettleQuietMs` (150), hard cap `SettleMaxMs` (1000) so continuously-updating apps never stall, fixed-delay fallback when a provider rejects subscriptions.
 
 ### RuntimeId + ElementCache is the central mechanism
 
-Elements are addressed across RPCs by a **`RuntimeId`** string (comma-joined `AutomationElement.GetRuntimeId()`). [`ElementCache`](UiAutomationGRPC.Server/Helpers/ElementCache.cs) is a static, thread-safe `ConcurrentDictionary` that:
+Elements are addressed across RPCs by a **`RuntimeId`** string (comma-joined UIA runtime id, `UiaRuntime.RuntimeIdOf`). [`ElementCache`](UiAutomationGRPC.Server/Helpers/ElementCache.cs) is a static, thread-safe `ConcurrentDictionary` that:
 - Hands back a `RuntimeId` whenever an element is discovered (`CacheElement`), storing locator metadata (PID + AutomationId/Name/ClassName) alongside the COM reference. **Metadata is stored in both modes** — this is what lets a `RuntimeId` resolve on a later call.
 - On every lookup (`TryGetLive`), **probes the cached COM reference for liveness** and, if stale, **re-finds** the element by its stored locator properties (AutomationId/Name/ClassName within the same PID), disambiguating duplicate locators by RuntimeId and falling back to a PID-scoped RuntimeId walk for anonymous containers. Dead-and-unfindable entries are evicted.
 - `Features:Cache:Enabled` selects the **RuntimeId resolution strategy, not property freshness** (handlers always read `element.Current.*` live). Enabled (default) trusts and reuses persisted handles, re-finding only when stale; disabled re-resolves every element from the live tree on each access (slower, but always reflects the live tree), falling back to the persisted handle only when a scoped re-find finds nothing. **RuntimeId addressing works in both modes** — disabling no longer breaks cross-call addressing or the See→Think→Act loop. Enabled is recommended even for dynamic UIs because it already auto-re-finds obsolete elements; reach for disabled only when you explicitly want a fresh tree search per access.
 - `GetAppStructure` and `PerformActionWithStructure` flush a process's cache (`ClearByProcess`) before rebuilding, so the returned tree is always fresh.
+- Stale-handle re-finds are **scoped to the owning process's top-level windows** (never a desktop-wide `Descendants` walk), and a background sweeper (started in `Program.cs`, 60 s) evicts entries and structure snapshots of exited processes.
 
 `AutomationMapper` translates proto conditions/scopes/patterns ↔ UIA types and produces `ElementResponse`s. New find-by properties must be added to `LookupProperty`.
 
@@ -92,17 +119,23 @@ Elements are addressed across RPCs by a **`RuntimeId`** string (comma-joined `Au
 Configured in `appsettings.json`, wired up in [Program.cs](UiAutomationGRPC.Server/Program.cs):
 
 1. **`AppAccessValidator`** — gates `OpenApp` by WhiteList/BlackList (path resolution, `..` traversal blocking, per-app arg filtering, global restricted args).
-2. **`InteractionAccessGuard`** — gates *interactions* with already-running processes using the **same** WhiteList/BlackList (resolves a PID's exe path, caches the decision per PID). This covers element ops (Find/GetChildren/GetProperty/PerformAction/Reflect), `GetAppStructure`, **and process termination** (`CloseApp` / `CloseAppByProcessId` — killing a process is treated as an interaction). Active only when `RestrictInteractions` is true **and** a list is configured. Handlers call `InteractionAccessGuard.CheckAccess(guard, processId)` and bail if it returns non-null. Note the per-PID decision cache never expires, so a recycled Windows PID could in theory inherit a stale decision.
+2. **`InteractionAccessGuard`** — gates *interactions* with already-running processes using the **same** WhiteList/BlackList (resolves a PID's exe path, caches the decision per PID). This covers element ops (Find/GetChildren/GetProperty/PerformAction/Reflect), `GetAppStructure`, **and process termination** (`CloseApp` / `CloseAppByProcessId` — killing a process is treated as an interaction). Active only when `RestrictInteractions` is true **and** a list is configured. Handlers call `InteractionAccessGuard.CheckAccess(guard, processId)` and bail if it returns non-null. The decision cache is keyed by (PID, process start time), so a recycled Windows PID cannot inherit a dead process's verdict.
 3. **`KeyAccessValidator`** — gates `SendKeys` input via `Features:KeyRestrictions` WhiteList/BlackList (substring match for blacklist, exact match for whitelist, plus the `{PLAINTEXT}` token).
 
-Transport security: `TokenAuthInterceptor` (Bearer token, added only when `Security:TokenAuthEnabled`) and `AuditInterceptor` (always on) in `Services/`. TLS is gated by the **`Security:Enabled`** flag — when false (the shipped default) Kestrel listens on plain HTTP regardless of any cert; when true it loads the cert from `Security:CertificatePath` / `Security:CertificatePassword` and **exits the process** if the file is missing. The listen port comes from `Security:Port` (default 50051) in both modes. The server binds to **loopback `127.0.0.1` by default**; set **`Security:AllowRemote=true`** to listen on all interfaces (`0.0.0.0`) — opt-in because the service can launch/kill processes and synthesize input. Note: enabling `TokenAuthEnabled` with an empty `Security:ValidTokens` list rejects *every* request (fail-closed, no startup warning).
+Transport security: `TokenAuthInterceptor` (Bearer token, added only when `Security:TokenAuthEnabled`; constant-time comparison) and `AuditInterceptor` (always on) in `Services/`. The standard `grpc.health.v1.Health` service is mapped so clients can probe readiness. TLS is gated by the **`Security:Enabled`** flag — when false (the shipped default) Kestrel listens on plain HTTP regardless of any cert; when true it loads the cert from `Security:CertificatePath` / `Security:CertificatePassword` and **exits the process** if the file is missing. The listen port comes from `Security:Port` (default 50051) in both modes. The server binds to **loopback `127.0.0.1` by default**; set **`Security:AllowRemote=true`** to listen on all interfaces (`0.0.0.0`) — opt-in because the service can launch/kill processes and synthesize input. Note: enabling `TokenAuthEnabled` with an empty `Security:ValidTokens` list rejects *every* request (fail-closed; the server prints a red startup warning).
 
-> **Config gotcha:** [Program.cs](UiAutomationGRPC.Server/Program.cs) binds the app access lists from **top-level** `WhiteList` / `BlackList` keys and `RestrictInteractions` (as the Server README documents). Key restrictions are read from `Features:KeyRestrictions`. (The old dead `Features:AppRestrictions` and `RateLimiting` blocks were removed from `appsettings.json` in Phase 4 — nothing read them.)
+> **Config gotcha:** [Program.cs](UiAutomationGRPC.Server/Program.cs) binds the app access lists from **top-level** `WhiteList` / `BlackList` keys and `RestrictInteractions` (as the Server README documents). Key restrictions are read from `Features:KeyRestrictions`; tree tuning from `Features:AppStructure`; the worker queue depth from `Features:MaxQueuedRequests` (not present in the shipped `appsettings.json` — default 32). (The old dead `Features:AppRestrictions` and `RateLimiting` blocks were removed from `appsettings.json` in Phase 4 — nothing read them.)
 
 ## Client SDK shape
 
 `UiAutomationDriver` (one per server connection, `IAsyncDisposable`) wraps the generated gRPC client and exposes async methods mirroring the RPCs. Connection modes: `insecureMode: true` (HTTP, dev only), HTTPS with OS-trusted cert, or HTTPS with a pinned self-signed cert (`certificatePath` → thumbprint pinning). `authToken` adds the Bearer header to every call. `VirtualMouse` / `VirtualKeyboard` are thin helpers over `PerformAction` / `SendKeys`.
 
+Every call carries a deadline (default 30 s, `defaultTimeout` ctor param; `WaitForElementAsync` extends it past the server-side wait budget) and accepts an optional `CancellationToken`. The channel has a declarative retry policy for **pre-execution rejections only** (`ResourceExhausted` from the full UIA worker queue, `Unavailable`) — mid-action codes are never retried because replaying a click is unsafe. The MCP server's channel uses the same policy. The MCP server also ships tool annotations (read-only/destructive hints), See→Think→Act `instructions` in the initialize response, and a `get_server_status` tool.
+
+## Session 0 — don't run it as a real Windows Service
+
+`Program.cs` still calls `UseWindowsService()`, but a service host runs in **Session 0**, which cannot see or drive the interactive user desktop — UIA reads and synthesized input silently target the wrong desktop. The server detects this at startup (`WarnIfNonInteractiveSession`) and logs a hard warning. The supported "run on boot" approach is the user's interactive session: a Scheduled Task triggered at logon, or a console run under the interactive account.
+
 ## Logging
 
-The server logs to the **Windows Event Viewer → Application log** (it runs as a Windows Service). Internal diagnostics use `System.Diagnostics.Trace`. There is no console/file log to tail by default.
+When hosted as a Windows Service the server logs to the **Windows Event Viewer → Application log**; run as a console app it logs to the console. Internal diagnostics use `System.Diagnostics.Trace`. There is no file log to tail by default.

@@ -18,7 +18,11 @@ namespace UiAutomationGRPC.Server.Helpers
     {
         private readonly AppAccessValidator _validator;
         private readonly AppAccessConfig _config;
-        private readonly ConcurrentDictionary<int, (bool Allowed, string Reason)> _cache = new();
+
+        // Keyed by (PID, process start time): Windows recycles PIDs, so a bare-PID cache could
+        // hand a new process the verdict that was computed for a dead one. The start time pins
+        // the decision to one process incarnation.
+        private readonly ConcurrentDictionary<(int Pid, long StartTicks), (bool Allowed, string Reason)> _cache = new();
 
         public InteractionAccessGuard(AppAccessValidator validator, AppAccessConfig config)
         {
@@ -54,7 +58,21 @@ namespace UiAutomationGRPC.Server.Helpers
             if (!IsActivelyRestricting)
                 return (true, "No interaction restrictions configured.");
 
-            return _cache.GetOrAdd(processId, pid => ResolveAndValidate(pid));
+            long startTicks = GetStartTicks(processId);
+            if (startTicks == 0)
+            {
+                // Process identity can't be established (exited / access denied) — validate
+                // without caching so a future process reusing this PID gets a fresh verdict.
+                return ResolveAndValidate(processId);
+            }
+
+            return _cache.GetOrAdd((processId, startTicks), key => ResolveAndValidate(key.Pid));
+        }
+
+        private static long GetStartTicks(int processId)
+        {
+            try { return Process.GetProcessById(processId).StartTime.Ticks; }
+            catch { return 0; }
         }
 
         /// <summary>

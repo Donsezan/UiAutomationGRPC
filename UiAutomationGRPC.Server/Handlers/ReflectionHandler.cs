@@ -1,5 +1,6 @@
 using System.Reflection;
-using System.Windows.Automation;
+using FlaUI.Core.Definitions;
+using FlaUI.Core.Identifiers;
 using Grpc.Core;
 using UiAutomation;
 using UiAutomationGRPC.Server.Helpers;
@@ -25,30 +26,19 @@ namespace UiAutomationGRPC.Server.Handlers
                 switch (request.Target)
                 {
                     case ReflectionTarget.AutomationProperties:
-                        AddStaticAutomationProperties(typeof(AutomationElement), response);
+                        // Enumerate every element-level PropertyId the UIA3 property library exposes.
+                        AddIdentifiers(UiaRuntime.Properties.Element, response);
                         break;
 
                     case ReflectionTarget.ControlTypes:
-                        foreach (var f in typeof(ControlType).GetFields(BindingFlags.Public | BindingFlags.Static))
+                        foreach (var name in Enum.GetNames<ControlType>())
                         {
-                            if (f.FieldType == typeof(ControlType))
-                            {
-                                var ct = (ControlType)f.GetValue(null);
-                                response.Entries.Add(new ReflectionEntry { Name = f.Name, Value = ct.ProgrammaticName ?? ct.ToString() });
-                            }
+                            response.Entries.Add(new ReflectionEntry { Name = name, Value = "ControlType." + name });
                         }
                         break;
 
                     case ReflectionTarget.Patterns:
-                        foreach (var t in typeof(AutomationElement).Assembly.GetTypes())
-                        {
-                            var field = t.GetField("Pattern", BindingFlags.Public | BindingFlags.Static);
-                            if (field != null && field.FieldType == typeof(AutomationPattern))
-                            {
-                                var ap = (AutomationPattern)field.GetValue(null);
-                                response.Entries.Add(new ReflectionEntry { Name = t.Name, Value = ap.ProgrammaticName ?? ap.Id.ToString() });
-                            }
-                        }
+                        AddIdentifiers(UiaRuntime.Automation.PatternLibrary, response);
                         break;
 
                     case ReflectionTarget.ElementSupportedPatterns:
@@ -59,17 +49,16 @@ namespace UiAutomationGRPC.Server.Handlers
                             return response;
                         }
                         // Validate interaction access for element-specific reflection
-                        var blockedP = InteractionAccessGuard.CheckAccess(_guard, elementPatterns.Current.ProcessId);
+                        var blockedP = InteractionAccessGuard.CheckAccess(_guard, elementPatterns.Properties.ProcessId.ValueOrDefault);
                         if (blockedP != null)
                         {
                             response.Success = false;
                             response.Message = blockedP;
                             return response;
                         }
-                        var supportedPatterns = elementPatterns.GetSupportedPatterns();
-                        foreach (var p in supportedPatterns)
+                        foreach (var p in elementPatterns.GetSupportedPatterns())
                         {
-                            response.Entries.Add(new ReflectionEntry { Name = p.ProgrammaticName ?? p.Id.ToString(), Value = p.Id.ToString() });
+                            response.Entries.Add(new ReflectionEntry { Name = p.Name ?? p.Id.ToString(), Value = p.Id.ToString() });
                         }
                         break;
 
@@ -81,17 +70,16 @@ namespace UiAutomationGRPC.Server.Handlers
                             return response;
                         }
                         // Validate interaction access for element-specific reflection
-                        var blockedPr = InteractionAccessGuard.CheckAccess(_guard, elementProps.Current.ProcessId);
+                        var blockedPr = InteractionAccessGuard.CheckAccess(_guard, elementProps.Properties.ProcessId.ValueOrDefault);
                         if (blockedPr != null)
                         {
                             response.Success = false;
                             response.Message = blockedPr;
                             return response;
                         }
-                        var supportedProps = elementProps.GetSupportedProperties();
-                        foreach (var ap in supportedProps)
+                        foreach (var ap in elementProps.GetSupportedPropertiesDirect())
                         {
-                            response.Entries.Add(new ReflectionEntry { Name = ap.ProgrammaticName ?? ap.Id.ToString(), Value = ap.Id.ToString() });
+                            response.Entries.Add(new ReflectionEntry { Name = ap.Name ?? ap.Id.ToString(), Value = ap.Id.ToString() });
                         }
                         break;
 
@@ -113,14 +101,18 @@ namespace UiAutomationGRPC.Server.Handlers
             }
         }
 
-        private void AddStaticAutomationProperties(Type t, ReflectionResponse response)
+        /// <summary>
+        /// Adds every <see cref="PropertyId"/>/<see cref="PatternId"/> exposed as a property of the
+        /// given library object (FlaUI's libraries are plain interfaces with one property per id).
+        /// </summary>
+        private static void AddIdentifiers(object library, ReflectionResponse response)
         {
-            foreach (var f in t.GetFields(BindingFlags.Public | BindingFlags.Static))
+            foreach (var prop in library.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
-                if (f.FieldType == typeof(AutomationProperty))
+                if (!typeof(IdentifierBase).IsAssignableFrom(prop.PropertyType)) continue;
+                if (prop.GetValue(library) is IdentifierBase id)
                 {
-                    var ap = (AutomationProperty)f.GetValue(null);
-                    response.Entries.Add(new ReflectionEntry { Name = f.Name, Value = ap.ProgrammaticName ?? ap.Id.ToString() });
+                    response.Entries.Add(new ReflectionEntry { Name = prop.Name, Value = id.Id.ToString() });
                 }
             }
         }

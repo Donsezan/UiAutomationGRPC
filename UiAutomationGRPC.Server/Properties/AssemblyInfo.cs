@@ -35,3 +35,8 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyVersion("1.0.0.0")]
 [assembly: AssemblyFileVersion("1.0.0.0")]
 [assembly: InternalsVisibleTo("UiAutomationGRPC.Server.Tests")]
+
+// GenerateAssemblyInfo=false suppresses the SDK's auto-generated platform attribute, so the
+// platform-compat analyzer would otherwise treat this Windows-only server as cross-platform
+// and flag every FlaUI/System.Drawing call with CA1416.
+[assembly: System.Runtime.Versioning.SupportedOSPlatform("windows7.0")]

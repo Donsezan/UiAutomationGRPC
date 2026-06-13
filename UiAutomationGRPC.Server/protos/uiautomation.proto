@@ -30,6 +30,10 @@ service UiAutomationService {
   // Gets immediate children of an element
   rpc GetChildren (GetChildrenRequest) returns (ElementListResponse);
 
+  // Polls for an element matching a condition until it appears or the timeout elapses.
+  // One round trip replaces the client-side "retry find_element" loop (slow + token-hungry for LLM agents).
+  rpc WaitForElement (WaitForElementRequest) returns (ElementResponse);
+
   // Sends keys to the active application
   rpc SendKeys (SendKeysRequest) returns (PerformActionResponse);
 
@@ -43,6 +47,10 @@ service UiAutomationService {
 
   // Clears the server-side element cache (teardown / memory management)
   rpc ClearCache (ClearCacheRequest) returns (PerformActionResponse);
+
+  // Reports server health/diagnostics: worker queue load, cache size, session interactivity.
+  // Lets a client (or LLM agent) self-diagnose "server busy" / "Session 0 cannot drive the desktop".
+  rpc GetServerStatus (ServerStatusRequest) returns (ServerStatusResponse);
 }
 
 // -- Common --
@@ -73,6 +81,14 @@ message FindElementRequest {
 
 message GetChildrenRequest {
     string runtime_id = 1; // Optional, defaults to desktop if empty
+}
+
+message WaitForElementRequest {
+  string start_runtime_id = 1;  // Empty for Desktop
+  Condition condition = 2;
+  TreeScope scope = 3;
+  int32 timeout_ms = 4;         // Total wait budget. 0 = server default (10000); clamped to <= 120000.
+  int32 poll_interval_ms = 5;   // Delay between probes. 0 = server default (250); clamped to [50, 5000].
 }
 
 enum TreeScope {
@@ -116,6 +132,17 @@ message PerformActionRequest {
     string runtime_id = 1;
     ActionType action = 2;
     repeated string arguments = 3; // For SetValue etc.
+    StructureOptions structure_options = 4; // Only used by PerformActionWithStructure (ignored by PerformAction)
+}
+
+// Per-request overrides for the app-structure tree build. Every field is optional;
+// unset fields fall back to the server's Features:AppStructure defaults.
+message StructureOptions {
+    int32 max_depth = 1;                  // > 0 overrides the depth cap for this request
+    int32 max_nodes = 2;                  // > 0 overrides the node cap for this request
+    optional bool include_offscreen = 3;  // set to override offscreen filtering for this request
+    string scope_runtime_id = 4;          // non-empty: build the tree under this element instead of the window root
+    bool diff_mode = 5;                   // true: return only nodes added/changed/removed since the previous build of this process
 }
 
 enum ActionType {
@@ -231,12 +258,30 @@ message AppStructureRequest {
     int32 process_id = 2;
     bool use_process_id = 3; // if true, use process_id, else app_name
     string arguments = 4; // For launching if not open (optional)
+    StructureOptions structure_options = 5;
 }
 
 message AppStructureResponse {
     string json_structure = 1;
     bool success = 2;
     string message = 3;
+}
+
+// -- Server Status --
+
+message ServerStatusRequest {
+}
+
+message ServerStatusResponse {
+    bool success = 1;
+    string message = 2;             // human-readable warnings (e.g. Session 0)
+    int32 pending_requests = 3;     // queued + running work items on the UIA worker
+    int32 queue_capacity = 4;       // max queue depth before ResourceExhausted
+    int32 cached_elements = 5;      // ElementCache entry count
+    bool cache_enabled = 6;         // RuntimeId resolution strategy flag
+    int32 session_id = 7;           // Windows session of the server process
+    bool interactive_session = 8;   // false => server cannot see/drive the user desktop
+    string server_version = 9;
 }
 
 // -- Cache Management --

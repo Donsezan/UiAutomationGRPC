@@ -1,5 +1,5 @@
 using System.Drawing;
-using System.Windows.Automation;
+using FlaUI.Core.AutomationElements;
 using Grpc.Core;
 using UiAutomation;
 using UiAutomationGRPC.Server.Helpers;
@@ -34,7 +34,7 @@ namespace UiAutomationGRPC.Server.Handlers
             }
 
             // Validate interaction access against the owning process
-            var blocked = InteractionAccessGuard.CheckAccess(_guard, element.Current.ProcessId);
+            var blocked = InteractionAccessGuard.CheckAccess(_guard, element.Properties.ProcessId.ValueOrDefault);
             if (blocked != null)
                 return new PerformActionResponse { Success = false, Message = blocked };
 
@@ -43,13 +43,13 @@ namespace UiAutomationGRPC.Server.Handlers
                 switch (request.Action)
                 {
                     case ActionType.Invoke:
-                        AutomationMapper.GetPattern<InvokePattern>(element, InvokePattern.Pattern).Invoke();
+                        element.Patterns.Invoke.Pattern.Invoke();
                         break;
                     case ActionType.Toggle:
-                        AutomationMapper.GetPattern<TogglePattern>(element, TogglePattern.Pattern).Toggle();
+                        element.Patterns.Toggle.Pattern.Toggle();
                         break;
                     case ActionType.ExpandCollapse:
-                        var ecPattern = AutomationMapper.GetPattern<ExpandCollapsePattern>(element, ExpandCollapsePattern.Pattern);
+                        var ecPattern = element.Patterns.ExpandCollapse.Pattern;
                         if (request.Arguments.Count > 0 && string.Equals(request.Arguments[0], "collapse", StringComparison.OrdinalIgnoreCase))
                             ecPattern.Collapse();
                         else
@@ -57,32 +57,33 @@ namespace UiAutomationGRPC.Server.Handlers
                         break;
                     case ActionType.SetValue:
                         if (request.Arguments.Count == 0) throw new ArgumentException("SetValue requires an argument.");
-                        AutomationMapper.GetPattern<ValuePattern>(element, ValuePattern.Pattern).SetValue(request.Arguments[0]);
+                        element.Patterns.Value.Pattern.SetValue(request.Arguments[0]);
                         break;
                     case ActionType.Select:
-                        AutomationMapper.GetPattern<SelectionItemPattern>(element, SelectionItemPattern.Pattern).Select();
+                        element.Patterns.SelectionItem.Pattern.Select();
                         break;
                     case ActionType.SetFocus:
-                        element.SetFocus();
+                        element.Focus();
                         break;
                     case ActionType.Click:
                         // Legacy action: prefer InvokePattern, fall back to a simulated
                         // left-click for elements that don't support Invoke.
-                        if (element.TryGetCurrentPattern(InvokePattern.Pattern, out object invPat))
+                        var invokePattern = element.Patterns.Invoke.PatternOrDefault;
+                        if (invokePattern != null)
                         {
-                            ((InvokePattern)invPat).Invoke();
+                            invokePattern.Invoke();
                         }
                         else if (!ClickElementAtCenter(element))
                         {
                             throw new InvalidOperationException("Element does not support InvokePattern and no clickable point could be resolved.");
                         }
                         break;
-                    case ActionType.MoveTo:                        
-                        var rect = element.Current.BoundingRectangle;
+                    case ActionType.MoveTo:
+                        var rect = element.BoundingRectangle;
                         if (rect.Width > 0 && rect.Height > 0)
                         {
-                            int x = (int)(rect.X + rect.Width / 2);
-                            int y = (int)(rect.Y + rect.Height / 2);
+                            int x = rect.X + rect.Width / 2;
+                            int y = rect.Y + rect.Height / 2;
                             VirtualMouse.MoveTo(x, y);
                         }
                         break;
@@ -196,17 +197,38 @@ namespace UiAutomationGRPC.Server.Handlers
                     if (!ElementCache.TryGetLive(request.RuntimeId, out var target))
                         return new PerformActionResponse { Success = false, Message = "Element not found in cache." };
 
-                    var blocked = InteractionAccessGuard.CheckAccess(_guard, target.Current.ProcessId);
+                    var blocked = InteractionAccessGuard.CheckAccess(_guard, target.Properties.ProcessId.ValueOrDefault);
                     if (blocked != null)
                         return new PerformActionResponse { Success = false, Message = blocked };
 
+                    // SetFocus alone cannot raise a background window (foreground-lock rules) —
+                    // bring the owning window forward first so the keys land in the right app.
+                    WindowFocus.EnsureForeground(target);
+
                     try
                     {
-                        target.SetFocus();
+                        target.Focus();
                     }
                     catch (Exception ex)
                     {
                         return new PerformActionResponse { Success = false, Message = $"Could not focus target element before sending keys: {ex.Message}" };
+                    }
+
+                    // Focus moves asynchronously (the app must pump WM_SETFOCUS); injecting
+                    // immediately can land the first keystrokes in the previous focus owner.
+                    Thread.Sleep(50);
+
+                    // SendInput goes to whatever is foreground. If activation lost the race
+                    // (e.g. a user is actively clicking elsewhere), refuse rather than leak
+                    // the keystrokes into the wrong application.
+                    if (!WindowFocus.IsForeground(target))
+                    {
+                        return new PerformActionResponse
+                        {
+                            Success = false,
+                            Message = "Target window could not be brought to the foreground (another window holds focus). " +
+                                      "Keys were NOT sent. Retry when the desktop is idle, or use SET_VALUE for text fields."
+                        };
                     }
                 }
 
@@ -238,7 +260,8 @@ namespace UiAutomationGRPC.Server.Handlers
         /// </summary>
         public static bool ClickElementAtCenter(AutomationElement element, bool rightClick = false)
         {
-            try { element.SetFocus(); } catch (Exception ex) { System.Diagnostics.Trace.WriteLine($"[ActionHandler] SetFocus failed (non-fatal): {ex.Message}"); }
+            WindowFocus.EnsureForeground(element);
+            try { element.Focus(); } catch (Exception ex) { System.Diagnostics.Trace.WriteLine($"[ActionHandler] Focus failed (non-fatal): {ex.Message}"); }
 
             if (!TryGetClickablePoint(element, out Point pt))
                 return false;
@@ -274,21 +297,24 @@ namespace UiAutomationGRPC.Server.Handlers
         /// </summary>
         public static bool TryGetClickablePoint(AutomationElement element, out Point pt)
         {
-            if (element.TryGetClickablePoint(out System.Windows.Point winPt)) 
+            try
             {
-                pt = new Point((int)winPt.X, (int)winPt.Y);
-                return true;
+                if (element.TryGetClickablePoint(out pt))
+                    return true;
             }
-            
+            catch (Exception ex) { System.Diagnostics.Trace.WriteLine($"[ActionHandler] TryGetClickablePoint failed: {ex.Message}"); }
+
             // Fallback to center of bounding box
-            try {
-                var rect = element.Current.BoundingRectangle;
+            try
+            {
+                var rect = element.BoundingRectangle;
                 if (rect.Width > 0 && rect.Height > 0)
                 {
-                    pt = new Point((int)(rect.X + rect.Width / 2), (int)(rect.Y + rect.Height / 2));
+                    pt = new Point(rect.X + rect.Width / 2, rect.Y + rect.Height / 2);
                     return true;
                 }
-            } catch (Exception ex) { System.Diagnostics.Trace.WriteLine($"[ActionHandler] BoundingRectangle fallback failed: {ex.Message}"); }
+            }
+            catch (Exception ex) { System.Diagnostics.Trace.WriteLine($"[ActionHandler] BoundingRectangle fallback failed: {ex.Message}"); }
 
             pt = new Point(0, 0);
             return false;

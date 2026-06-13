@@ -1,4 +1,4 @@
-using System.Windows.Automation;
+using FlaUI.Core.AutomationElements;
 using NUnit.Framework;
 using UiAutomationGRPC.Server.Helpers;
 
@@ -7,8 +7,8 @@ namespace UiAutomationGRPC.Server.Tests
     /// <summary>
     /// Tests for <see cref="ElementCache"/> RuntimeId resolution.
     ///
-    /// These exercise the real UI Automation stack against the always-present desktop root
-    /// (<see cref="AutomationElement.RootElement"/>), so they require an interactive Windows session.
+    /// These exercise the real UIA3 stack against the always-present desktop root
+    /// (<see cref="UiaRuntime.Desktop"/>), so they require an interactive Windows session.
     /// When UIA is unavailable (headless CI) each test is marked inconclusive rather than failing.
     ///
     /// The key regression here is the cache-disabled bug: with <c>Features:Cache:Enabled=false</c> the
@@ -29,7 +29,7 @@ namespace UiAutomationGRPC.Server.Tests
 
             try
             {
-                _root = AutomationElement.RootElement;
+                _root = UiaRuntime.Desktop;
             }
             catch
             {
@@ -108,7 +108,8 @@ namespace UiAutomationGRPC.Server.Tests
 
             // A real descendant (top-level window) exercises the live-tree re-resolution path,
             // not just the root fallback. Skip if the session has no top-level windows.
-            var firstWindow = TreeWalker.ControlViewWalker.GetFirstChild(root);
+            var walker = UiaRuntime.Automation.TreeWalkerFactory.GetControlViewWalker();
+            var firstWindow = walker.GetFirstChild(root);
             if (firstWindow == null)
                 Assert.Ignore("No top-level windows available to resolve in this session.");
 
@@ -160,7 +161,7 @@ namespace UiAutomationGRPC.Server.Tests
             var root = RequireRoot();
             ElementCache.Enabled = cacheEnabled;
             ElementCache.CacheElement(root);
-            int pid = root.Current.ProcessId;
+            int pid = root.Properties.ProcessId.ValueOrDefault;
 
             int removed = ElementCache.ClearByProcess(pid);
 

@@ -60,6 +60,9 @@ public class Program
             ? "[Config] Cache: Enabled (persisted element handles reused, re-found if stale)"
             : "[Config] Cache: DISABLED \u2014 every request re-resolves elements from the live UI tree");
 
+        // Evict cache entries / structure snapshots of exited processes once a minute.
+        UiAutomationGRPC.Server.Helpers.ElementCache.StartSweeper(TimeSpan.FromSeconds(60));
+
         // Single serialized UI Automation worker. All UIA/input RPCs are marshalled onto
         // one dedicated MTA thread so concurrent clients can't fight over the mouse/keyboard
         // or race the element cache. The queue depth caps backlog before ResourceExhausted.
@@ -182,6 +185,11 @@ public class Program
         // Add gRPC reflection for service discovery (required for MapGrpcReflectionService)
         builder.Services.AddGrpcReflection();
 
+        // Standard gRPC health service (grpc.health.v1.Health) so clients can probe readiness
+        // instead of failing their first real call.
+        builder.Services.AddGrpcHealthChecks()
+            .AddCheck("uiautomation", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy());
+
         // Support for running as Windows Service
         builder.Host.UseWindowsService();
 
@@ -197,6 +205,7 @@ public class Program
         // Map gRPC service
         app.MapGrpcService<UiAutomationService>();
         app.MapGrpcReflectionService();
+        app.MapGrpcHealthChecksService();
 
         app.Run();
     }
