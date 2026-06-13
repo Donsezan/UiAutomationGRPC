@@ -143,6 +143,24 @@ Reliable startup sequence:
 
 ---
 
+## Extracting Text from Console / Win32 Apps
+
+Win32 console windows (`cmd.exe`, PowerShell legacy, etc.) expose a `ControlType.Document` text area via UIA, but **neither `Value` nor `Text` properties are readable** — the console buffer is not exposed through standard UIA text/value patterns. `get_property` with `Value` returns an "Unknown property" error.
+
+**Use the redirect-to-file approach instead:**
+
+1. `send_keys` to type a redirect command into the console, e.g.:
+   ```
+   dir > {%}TEMP{%}\out.txt{ENTER}
+   ```
+2. `Read` the file to get plain text output (`%TEMP%` resolves to `C:\Users\<user>\AppData\Local\Temp`).
+
+> **SendKeys gotcha — escape literal special characters:** `send_keys` passes the string straight to `System.Windows.Forms.SendKeys`, which reserves `% ^ + ~ ( ) { } [ ]` as syntax (`%` is the Alt modifier). A bare `%TEMP%` parses as `Alt+T,E,M,P` and fails with *"… is not valid."* To send any of these as **literal** text, wrap each in braces: `{%}`, `{^}`, `{+}`, `{(}`, `{)}`, `{[}`, `{]}`. So `%TEMP%` must be typed as `{%}TEMP{%}` — the console then receives the literal `%TEMP%` and expands it itself. This avoids hardcoding an absolute path.
+
+This applies to any app whose output area does not expose a readable UIA `Value` or `Text` — prefer it over `take_screenshot` whenever you need machine-readable text.
+
+---
+
 ## Troubleshooting
 
 | Symptom | Fix |
